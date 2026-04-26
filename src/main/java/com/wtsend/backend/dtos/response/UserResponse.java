@@ -1,0 +1,33 @@
+package com.wtsend.backend.dtos.response;
+
+import java.sql.Date;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class UserResponse {
+	private String id;
+	private String username;
+
+	private String displayName;
+
+	private Date birthday;
+
+	private String email;
+
+	private String phone;
+
+	private String avatarUrl;
+
+	private String avatarId;
+
+	private String bio;
+}

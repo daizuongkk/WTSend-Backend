@@ -1,0 +1,79 @@
+{
+  "properties": [
+    {
+      "name": "socketio.origin",
+      "type": "java.lang.String",
+      "description": "A description for 'socketio.origin'"
+    },
+    {
+      "name": "socketio.max-http-content-length",
+      "type": "java.lang.String",
+      "description": "A description for 'socketio.max-http-content-length'"
+    },
+    {
+      "name": "socketio.ping-interval",
+      "type": "java.lang.String",
+      "description": "A description for 'socketio.ping-interval'"
+    },
+    {
+      "name": "rsa.private-key",
+      "type": "java.lang.String",
+      "description": "A description for 'rsa.private-key'"
+    },
+    {
+      "name": "jwt.access-token.ttl",
+      "type": "java.lang.String",
+      "description": "A description for 'jwt.access-token.ttl'"
+    },
+    {
+      "name": "jwt.refresh-token.ttl",
+      "type": "java.lang.String",
+      "description": "A description for 'jwt.refresh-token.ttl'"
+    },
+    {
+      "name": "rsa.public-key",
+      "type": "java.lang.String",
+      "description": "A description for 'rsa.public-key'"
+    },
+    {
+      "name": "socketio.host",
+      "type": "java.lang.String",
+      "description": "A description for 'socketio.host'"
+    },
+    {
+      "name": "socketio.max-frame-payload-length",
+      "type": "java.lang.String",
+      "description": "A description for 'socketio.max-frame-payload-length'"
+    },
+    {
+      "name": "socketio.port",
+      "type": "java.lang.String",
+      "description": "A description for 'socketio.port'"
+    },
+    {
+      "name": "socketio.boss-count",
+      "type": "java.lang.String",
+      "description": "A description for 'socketio.boss-count'"
+    },
+    {
+      "name": "socketio.ping-timeout",
+      "type": "java.lang.String",
+      "description": "A description for 'socketio.ping-timeout'"
+    },
+    {
+      "name": "socketio.worker-count",
+      "type": "java.lang.String",
+      "description": "A description for 'socketio.worker-count'"
+    },
+    {
+      "name": "socketio.upgrade-timeout",
+      "type": "java.lang.String",
+      "description": "A description for 'socketio.upgrade-timeout'"
+    },
+    {
+      "name": "socketio.allow-custom-requests",
+      "type": "java.lang.String",
+      "description": "A description for 'socketio.allow-custom-requests'"
+    }
+  ]
+}
