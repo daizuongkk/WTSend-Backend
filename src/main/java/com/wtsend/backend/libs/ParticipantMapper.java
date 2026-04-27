@@ -18,7 +18,7 @@ public class ParticipantMapper {
 
 		response.setUserId(participant.getUser().getId());
 		response.setDisplayName(participant.getUser().getDisplayName());
-		response.setDisplayName(participant.getUser().getDisplayName());
+		response.setAvatarUrl(participant.getUser().getAvatarUrl());
 
 		response.setLastSeenMessageId(
 				participant.getLastSeenMessage() != null ? participant.getLastSeenMessage().getId() : null);

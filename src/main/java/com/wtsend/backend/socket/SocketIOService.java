@@ -30,7 +30,8 @@ public class SocketIOService {
 		if (token == null || token.isEmpty()) {
 			log.warn("No token provided from: {}",
 					handshakeData.getAddress());
-
+			client.disconnect();
+			return;
 		}
 
 		try {
@@ -40,8 +41,10 @@ public class SocketIOService {
 
 			UserResponse user = userService.findById(userId);
 
-			if (user == null)
+			if (user == null) {
 				client.disconnect();
+				return;
+			}
 
 			handshakeData.setAuthToken(userId);
 			log.info("Authorized: {}", jwt.getSubject());
@@ -50,6 +53,7 @@ public class SocketIOService {
 			log.error("Invalid token from: {}",
 					handshakeData.getAddress());
 			client.disconnect();
+			return;
 		}
 
 		Object authToken = handshakeData.getAuthToken();

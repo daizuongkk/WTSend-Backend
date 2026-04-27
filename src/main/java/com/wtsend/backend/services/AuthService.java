@@ -72,9 +72,10 @@ public class AuthService implements IAuthService {
 	public AuthResponse refreshToken(String token) {
 
 		User user = refreshTokenService.verify(token);
+		refreshTokenRepo.deleteByUserId(user.getId());
+
 		RefreshToken newRfToken = refreshTokenService.create(user);
 
-		refreshTokenRepo.deleteByUserId(user.getId());
 		String newAccessToken = jwtService.generateToken(user);
 		return AuthResponse.builder().success(true).message("Refresh token successfully")
 				.refreshToken(newRfToken.getToken())
