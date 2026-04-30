@@ -5,6 +5,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.wtsend.backend.dtos.response.UserResponse;
@@ -23,6 +24,11 @@ public class UserController {
 	public ResponseEntity<UserResponse> me(@AuthenticationPrincipal Jwt jwt) {
 
 		return ResponseEntity.ok(userService.me(jwt));
+	}
+
+	@GetMapping("/search")
+	public ResponseEntity<UserResponse> findByUsername(@RequestParam(name = "username") String username) {
+		return ResponseEntity.ok(userService.findByUsername(username));
 	}
 
 }

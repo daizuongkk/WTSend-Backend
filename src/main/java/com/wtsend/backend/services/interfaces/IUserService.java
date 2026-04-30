@@ -14,4 +14,6 @@ public interface IUserService {
 
 	public abstract UserResponse findById(String id);
 
+	public abstract UserResponse findByUsername(String username);
+
 }

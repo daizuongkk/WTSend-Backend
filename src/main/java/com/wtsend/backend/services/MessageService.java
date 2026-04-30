@@ -1,11 +1,13 @@
 package com.wtsend.backend.services;
 
 import com.wtsend.backend.libs.ConversationMapper;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.corundumstudio.socketio.SocketIOServer;
@@ -124,14 +126,14 @@ public class MessageService implements IMessageService {
 	@Override
 	public MessagesResponse getMessages(Long conversationId, int limit, Instant cursor) {
 
-		List<Message> messages = null;
-
+		List<Message> messages;
+		Pageable pageable = PageRequest.of(0, limit + 1);
 		if (cursor != null) {
 			messages = messageRepo.findAllByConversation_IdAndCreatedAtBeforeOrderByCreatedAtDesc(
 					conversationId,
 					cursor, PageRequest.of(0, limit + 1));
 		} else {
-			messages = messageRepo.findByConversation_id(conversationId, PageRequest.of(0, limit));
+			messages = messageRepo.findByConversation_IdOrderByCreatedAtDesc(conversationId, pageable);
 		}
 
 		Instant nextCursor = null;
@@ -141,9 +143,8 @@ public class MessageService implements IMessageService {
 			nextCursor = nextMessage.getCreatedAt();
 			messages.remove(messages.size() - 1);
 		}
-		messages.reversed();
 
-		List<MessageResponse> messageResponses = messages.stream()
+		List<MessageResponse> messageResponses = messages.reversed().stream()
 				.map(messageMapper::toResponse)
 				.toList();
 
