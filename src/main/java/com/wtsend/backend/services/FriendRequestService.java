@@ -18,7 +18,10 @@ import com.wtsend.backend.repositories.FriendRequestRepository;
 import com.wtsend.backend.repositories.UserRepository;
 import com.wtsend.backend.services.interfaces.IFriendRequestService;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
+@RequiredArgsConstructor
 public class FriendRequestService implements IFriendRequestService {
 	private final FriendRequestRepository friendRequestRepo;
 
@@ -27,14 +30,6 @@ public class FriendRequestService implements IFriendRequestService {
 	private final UserRepository userRepo;
 
 	private final UserUtils userUtils;
-
-	FriendRequestService(FriendRepository friendRepo, UserUtils userUtils, UserRepository userRepo,
-			FriendRequestRepository friendRequestRepo) {
-		this.friendRequestRepo = friendRequestRepo;
-		this.friendRepo = friendRepo;
-		this.userUtils = userUtils;
-		this.userRepo = userRepo;
-	}
 
 	@Override
 	public void sendFriendRequest(String from, AddFriendRequest request) {
@@ -125,13 +120,13 @@ public class FriendRequestService implements IFriendRequestService {
 								res.getToUser()))
 						.message(res.getMessage()).createdAt(res.getCreatedAt()).updatedAt(res.getUpdatedAt()).build())
 				.toList();
-		List<FriendRequestResponse> recieved = friendRequestRepo.findByToUserId(userId).stream()
+		List<FriendRequestResponse> received = friendRequestRepo.findByToUserId(userId).stream()
 				.map(res -> FriendRequestResponse.builder().id(res.getId()).from(userUtils.toUserResponse(
 						res.getFromUser())).to(userUtils.toUserResponse(
 								res.getToUser()))
 						.message(res.getMessage()).createdAt(res.getCreatedAt()).updatedAt(res.getUpdatedAt()).build())
 				.toList();
-		return Map.of("sent", sent, "revieved", recieved);
+		return Map.of("sent", sent, "received", received);
 	}
 
 }

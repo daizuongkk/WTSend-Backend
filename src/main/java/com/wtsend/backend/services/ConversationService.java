@@ -56,7 +56,7 @@ public class ConversationService implements IConversationService {
 	}
 
 	@Override
-	public void createConversation(CreateConversationRequest request, String userId) {
+	public ConversationResponse createConversation(CreateConversationRequest request, String userId) {
 		ConversationType type = request.getType();
 		String name = request.getName();
 		List<String> memberIds = request.getMemberIds();
@@ -71,8 +71,8 @@ public class ConversationService implements IConversationService {
 
 		Conversation conversation = type.equals(ConversationType.DIRECT) ? createDirectConversation(user, memberIds)
 				: createGroupConversation(user, memberIds, name);
-
 		conversationRepo.save(conversation);
+		return conversationMapper.toResponse(conversation);
 
 	}
 
@@ -113,7 +113,6 @@ public class ConversationService implements IConversationService {
 		Participant p2 = createParticipant(recipient, convo);
 
 		convo.setParticipants(new ArrayList<>(List.of(p1, p2)));
-		convo.setLastMessageAt(Instant.now());
 
 		return convo;
 	}

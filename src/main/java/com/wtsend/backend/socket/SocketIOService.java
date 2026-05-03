@@ -8,6 +8,7 @@ import com.corundumstudio.socketio.HandshakeData;
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.annotation.OnConnect;
 import com.corundumstudio.socketio.annotation.OnDisconnect;
+import com.corundumstudio.socketio.annotation.OnEvent;
 import com.wtsend.backend.dtos.response.UserResponse;
 import com.wtsend.backend.services.UserService;
 
@@ -68,4 +69,12 @@ public class SocketIOService {
 		userSession.onClientDisconnected(client);
 
 	}
+
+	@OnEvent("join-conversation")
+	public void onJoinConversation(SocketIOClient client, String convoId) {
+		client.joinRoom(convoId);
+		log.info("{} joined to room {} ", client.getSessionId(), convoId);
+
+	}
+
 }

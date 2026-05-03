@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.wtsend.backend.dtos.request.CreateConversationRequest;
+import com.wtsend.backend.dtos.response.ConversationResponse;
 import com.wtsend.backend.services.interfaces.IConversationService;
 
 import jakarta.validation.Valid;
@@ -34,10 +35,9 @@ public class ConversationController {
 	}
 
 	@PostMapping()
-	public ResponseEntity<String> createConversation(@RequestBody @Valid CreateConversationRequest request,
+	public ResponseEntity<ConversationResponse> createConversation(@RequestBody @Valid CreateConversationRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
-		conversationService.createConversation(request, jwt.getSubject());
-		return ResponseEntity.ok("{\"message\": \"Create a successful conversation\"}");
+		return ResponseEntity.ok(conversationService.createConversation(request, jwt.getSubject()));
 	}
 
 	@PatchMapping("/{id}")

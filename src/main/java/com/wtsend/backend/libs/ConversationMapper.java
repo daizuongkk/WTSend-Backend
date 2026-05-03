@@ -21,7 +21,9 @@ public class ConversationMapper {
 	public ConversationResponse toResponse(Conversation conversation) {
 		ConversationResponse response = mapper.map(conversation, ConversationResponse.class);
 
-		response.setLastMessage(mapper.map(conversation.getLastMessage(), LastMessage.class));
+		if (conversation.getLastMessage() != null)
+			response.setLastMessage(messageMapper.toLastMessage(conversation.getLastMessage()));
+
 		response.setParticipants(conversation.getParticipants().stream().map(participantMapper::toResponse).toList());
 		response.setGroupInfo(conversation.getGroup() == null ? null
 				: GroupInfoResponse.builder()
@@ -29,7 +31,6 @@ public class ConversationMapper {
 						.avatarUrl(conversation.getGroup().getAvatarUrl())
 						.creatorId(conversation.getGroup().getCreator().getId())
 						.build());
-		response.setLastMessage(messageMapper.toLastMessage(conversation.getLastMessage()));
 
 		return response;
 	}

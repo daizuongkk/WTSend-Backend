@@ -1,6 +1,7 @@
 package com.wtsend.backend.dtos.response;
 
 import java.sql.Date;
+import java.time.Instant;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,4 +31,7 @@ public class UserResponse {
 	private String avatarId;
 
 	private String bio;
+
+	private Instant createdAt;
+	private Instant updatedAt;
 }

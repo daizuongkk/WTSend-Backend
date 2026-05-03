@@ -13,6 +13,7 @@ import lombok.Setter;
 @Builder
 public class FriendResponse {
 	private String id;
+	private String username;
 	private String displayName;
 	private String avatarUrl;
 

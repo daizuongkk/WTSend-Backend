@@ -12,7 +12,7 @@ public interface IConversationService {
 
 	public abstract List<ConversationResponse> getConversations(String userId);
 
-	public abstract void createConversation(CreateConversationRequest request, String userId);
+	public abstract ConversationResponse createConversation(CreateConversationRequest request, String userId);
 
 	public abstract List<Long> getConversationIdsByUserId(String userId);
 
