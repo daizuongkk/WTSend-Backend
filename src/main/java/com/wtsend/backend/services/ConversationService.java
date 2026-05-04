@@ -72,6 +72,10 @@ public class ConversationService implements IConversationService {
 		Conversation conversation = type.equals(ConversationType.DIRECT) ? createDirectConversation(user, memberIds)
 				: createGroupConversation(user, memberIds, name);
 		conversationRepo.save(conversation);
+		if (type.equals(ConversationType.GROUP))
+			memberIds.forEach(
+					id -> server.getRoomOperations(id).sendEvent("new-group", conversationMapper.toResponse(conversation)));
+
 		return conversationMapper.toResponse(conversation);
 
 	}
@@ -143,10 +147,6 @@ public class ConversationService implements IConversationService {
 
 	private Conversation createGroupConversation(User user, List<String> memberIds, String name) {
 
-		if (memberIds.size() < 2) {
-			throw new RequestException("Group must have at least 2 members");
-		}
-
 		if (name == null || name.isBlank()) {
 			name = "Nhóm của " + user.getDisplayName().split(" ")[0];
 		}
@@ -164,6 +164,7 @@ public class ConversationService implements IConversationService {
 		GroupInfo groupInfo = GroupInfo.builder().conversation(conversation).avatarUrl(name).name(name).creator(user)
 				.build();
 		conversation.setGroup(groupInfo);
+
 		return conversation;
 	}
 

@@ -5,7 +5,6 @@ import org.springframework.stereotype.Component;
 
 import com.wtsend.backend.dtos.response.ConversationResponse;
 import com.wtsend.backend.dtos.response.GroupInfoResponse;
-import com.wtsend.backend.dtos.response.LastMessage;
 import com.wtsend.backend.models.Conversation;
 
 import lombok.RequiredArgsConstructor;

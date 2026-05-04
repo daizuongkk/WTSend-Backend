@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.corundumstudio.socketio.SocketIOClient;
+import com.corundumstudio.socketio.SocketIOServer;
 import com.wtsend.backend.dtos.response.UserResponse;
 import com.wtsend.backend.services.ConversationService;
 import com.wtsend.backend.services.UserService;
@@ -64,6 +65,8 @@ public class UserSessionService {
 			client.joinRoom(ci.toString());
 			log.info("{} joined to room {} ", user.getUsername(), ci);
 		});
+
+		client.joinRoom(user.getId());
 	}
 
 }
