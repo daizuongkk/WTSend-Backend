@@ -32,6 +32,13 @@
 	</properties>
 	<dependencies>
 
+		<dependency>
+			<groupId>com.cloudinary</groupId>
+			<artifactId>cloudinary-http45</artifactId>
+			<version>1.39.0</version>
+		</dependency>
+
+
 		<!-- parameter names -->
 		<dependency>
 			<groupId>com.fasterxml.jackson.module</groupId>
