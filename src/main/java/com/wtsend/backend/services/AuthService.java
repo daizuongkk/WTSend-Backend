@@ -39,14 +39,14 @@ public class AuthService implements IAuthService {
 
 	public AuthResponse signIn(SignInRequest req) {
 		UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
-				req.getUsername().trim(), req.getPassword());
+				req.getEmail().trim(), req.getPassword());
 
 		Authentication auth = authenticationManager.authenticate(usernamePasswordAuthenticationToken);
 
 		User user = (User) auth.getPrincipal();
 
 		RefreshToken newRfToken = refreshTokenService.create(user);
-		return AuthResponse.builder().message("Login successfully!").success(true).username(req.getUsername())
+		return AuthResponse.builder().message("Login successfully!").success(true).username(user.getUsername())
 				.email(user.getEmail()).displayName(user.getDisplayName())
 				.accessToken(jwtService.generateToken(user)).refreshToken(newRfToken.getToken()).build();
 	}

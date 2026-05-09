@@ -44,6 +44,7 @@ public class Message implements Serializable {
 	@JoinColumn(name = "conversationId")
 	private Conversation conversation;
 
+	@Column(columnDefinition = "TEXT")
 	private String content;
 
 	private String imgUrl;

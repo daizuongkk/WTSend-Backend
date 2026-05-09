@@ -10,9 +10,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.wtsend.backend.dtos.request.UpdateUserRequest;
 import com.wtsend.backend.dtos.response.UserResponse;
 import com.wtsend.backend.services.UserService;
 import com.wtsend.backend.services.interfaces.IUserService;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.PathVariable;
 
 @RestController
 @RequestMapping("/api/users")
@@ -30,7 +34,7 @@ public class UserController {
 	}
 
 	@GetMapping("/search")
-	public ResponseEntity<UserResponse> findByUsername(@RequestParam(name = "username") String username) {
+	public ResponseEntity<UserResponse> searchUserByUsername(@RequestParam(name = "username") String username) {
 		return ResponseEntity.ok(userService.findByUsername(username));
 	}
 
@@ -40,6 +44,13 @@ public class UserController {
 		String imgUrl = userService.uploadAvatar(file, jwt.getSubject());
 
 		return ResponseEntity.ok("{\"avatarUrl\":\"" + imgUrl + "\"}");
+	}
+
+	@PutMapping("")
+	public ResponseEntity<String> updateUser(@RequestBody UpdateUserRequest request) {
+		UserResponse user = userService.updateUser(request);
+
+		return ResponseEntity.ok("null");
 	}
 
 }

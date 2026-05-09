@@ -1,13 +1,17 @@
 package com.wtsend.backend.services;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.wtsend.backend.dtos.request.SignUpRequest;
+import com.wtsend.backend.dtos.request.UpdateUserRequest;
 import com.wtsend.backend.dtos.response.UserResponse;
 import com.wtsend.backend.exceptions.DuplicateResourceException;
 import com.wtsend.backend.exceptions.RequestException;
@@ -84,6 +88,27 @@ public class UserService implements IUserService {
 
 		return user.getAvatarUrl();
 
+	}
+
+	@Override
+	public UserResponse updateUser(UpdateUserRequest request) {
+
+		User existUser = userRepository.findByUsername(request.getUsername())
+				.orElseThrow(() -> new EntityNotFoundException("User not found by usrename: " + request.getUsername()));
+
+		existUser.setUsername(request.getUsername());
+		existUser.setEmail(request.getEmail());
+		existUser.setDisplayName(request.getDisplayName());
+		if (request.getPhone() != null)
+			existUser.setPhone(request.getPhone());
+		if (request.getBio() != null)
+			existUser.setBio(request.getBio());
+
+		if (request.getBirth() != null) {
+			existUser.setBirthday(LocalDate.parse(request.getBirth(), DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+		}
+		userRepository.save(existUser);
+		return userMapper.toUserResponse(existUser);
 	}
 
 }

@@ -1,7 +1,7 @@
 package com.wtsend.backend.models;
 
-import java.sql.Date;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -76,7 +76,7 @@ public class User implements UserDetails {
 	String displayName;
 
 	@Column(name = "birthday")
-	Date birthday;
+	LocalDate birthday;
 
 	@Column(name = "email", nullable = false, unique = true)
 	String email;
