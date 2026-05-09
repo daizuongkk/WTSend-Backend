@@ -1,6 +1,5 @@
 package com.wtsend.backend.services;
 
-import java.io.IOException;
 import java.util.Map;
 
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -8,9 +7,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.cloudinary.Cloudinary;
-import com.cloudinary.Transformation;
-import com.cloudinary.utils.ObjectUtils;
 import com.wtsend.backend.dtos.request.SignUpRequest;
 import com.wtsend.backend.dtos.response.UserResponse;
 import com.wtsend.backend.exceptions.DuplicateResourceException;

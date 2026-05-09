@@ -28,7 +28,7 @@ public class CloudinaryService {
 					new Transformation<>()
 							.width(200)
 							.height(200)
-							.crop("crop")
+							.crop("fill")
 							.gravity("face")
 							.quality("auto")
 							.fetchFormat("auto")));

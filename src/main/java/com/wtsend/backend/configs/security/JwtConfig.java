@@ -24,7 +24,6 @@ public class JwtConfig {
 	}
 
 	@Bean
-
 	public JwtEncoder jwtEncoder() {
 		JWK jwk = new RSAKey.Builder(rsaKey.getPublicKey()).privateKey(rsaKey.getPrivateKey()).build();
 		JWKSource<SecurityContext> jwks = new ImmutableJWKSet<>(new JWKSet(jwk));

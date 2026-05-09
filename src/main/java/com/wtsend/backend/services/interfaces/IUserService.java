@@ -1,7 +1,5 @@
 package com.wtsend.backend.services.interfaces;
 
-import java.util.Map;
-
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
