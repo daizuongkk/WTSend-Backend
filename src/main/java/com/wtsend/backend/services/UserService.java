@@ -5,7 +5,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -104,8 +103,8 @@ public class UserService implements IUserService {
 		if (request.getBio() != null)
 			existUser.setBio(request.getBio());
 
-		if (request.getBirth() != null) {
-			existUser.setBirthday(LocalDate.parse(request.getBirth(), DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+		if (request.getBirthday() != null) {
+			existUser.setBirthday(LocalDate.parse(request.getBirthday(), DateTimeFormatter.ofPattern("yyyy-MM-dd")));
 		}
 		userRepository.save(existUser);
 		return userMapper.toUserResponse(existUser);

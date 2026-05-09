@@ -25,7 +25,12 @@ public class UserUtils {
 	}
 
 	public UserResponse toUserResponse(User user) {
-		return modelMapper.map(user, UserResponse.class);
+		UserResponse userResponse = modelMapper.map(user, UserResponse.class);
+		if (user.getBirthday() != null) {
+			userResponse.setBirthday(user.getBirthday().toString());
+
+		}
+		return userResponse;
 	}
 
 	public FriendResponse toFriendResponse(User user) {

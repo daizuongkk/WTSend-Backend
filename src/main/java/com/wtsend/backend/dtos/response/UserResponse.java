@@ -20,7 +20,7 @@ public class UserResponse {
 
 	private String displayName;
 
-	private Date birthday;
+	private String birthday;
 
 	private String email;
 
