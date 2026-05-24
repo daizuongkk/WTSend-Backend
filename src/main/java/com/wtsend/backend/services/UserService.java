@@ -34,10 +34,6 @@ public class UserService implements IUserService {
 
 	public UserResponse createUser(SignUpRequest request) {
 
-		if (userRepository.existsByUsername(request.getUsername())) {
-			throw new DuplicateResourceException("Username already exists");
-		}
-
 		if (userRepository.existsByEmail(request.getEmail())) {
 			throw new DuplicateResourceException("Email already exists");
 		}
@@ -105,6 +101,10 @@ public class UserService implements IUserService {
 
 		if (request.getBirthday() != null) {
 			existUser.setBirthday(LocalDate.parse(request.getBirthday(), DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+		}
+
+		if (request.getAvatar() != null) {
+			uploadAvatar(request.getAvatar(), existUser.getId());
 		}
 		userRepository.save(existUser);
 		return userMapper.toUserResponse(existUser);

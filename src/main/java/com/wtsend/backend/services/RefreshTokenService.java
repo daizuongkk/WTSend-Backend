@@ -11,18 +11,16 @@ import com.wtsend.backend.models.User;
 import com.wtsend.backend.repositories.RefreshTokenRepository;
 import com.wtsend.backend.repositories.UserRepository;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
+@RequiredArgsConstructor
 public class RefreshTokenService {
 	@Value("${jwt.refresh-token.ttl}")
 	private Long REFRESH_TOKEN_TTL;
 	private final RefreshTokenRepository refreshTokenRepo;
 
 	private final UserRepository userRepo;
-
-	RefreshTokenService(RefreshTokenRepository refreshTokenRepo, UserRepository userRepo) {
-		this.refreshTokenRepo = refreshTokenRepo;
-		this.userRepo = userRepo;
-	}
 
 	public User verify(String token) {
 
@@ -32,11 +30,8 @@ public class RefreshTokenService {
 		RefreshToken rfToken = refreshTokenRepo.findById(token)
 				.orElseThrow(() -> new RefreshTokenException("Token is invalid or expired"));
 
-		User user = userRepo.findById(rfToken.getUserId())
+		return userRepo.findById(rfToken.getUserId())
 				.orElseThrow(() -> new RefreshTokenException("User not found by id: " + rfToken.getUserId()));
-
-		refreshTokenRepo.delete(rfToken);
-		return user;
 	}
 
 	public RefreshToken create(User user) {

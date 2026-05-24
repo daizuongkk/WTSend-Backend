@@ -1,6 +1,5 @@
 package com.wtsend.backend.services;
 
-import com.wtsend.backend.libs.MessageMapper;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,11 +14,12 @@ import com.wtsend.backend.exceptions.ForbiddenException;
 import com.wtsend.backend.exceptions.RequestException;
 import com.wtsend.backend.exceptions.ResourceNotFoundException;
 import com.wtsend.backend.libs.ConversationMapper;
+import com.wtsend.backend.libs.MessageMapper;
 import com.wtsend.backend.models.Conversation;
-import com.wtsend.backend.models.ConversationType;
 import com.wtsend.backend.models.GroupInfo;
 import com.wtsend.backend.models.Participant;
 import com.wtsend.backend.models.User;
+import com.wtsend.backend.models.enums.ConversationType;
 import com.wtsend.backend.repositories.ConversationRepository;
 import com.wtsend.backend.repositories.FriendRepository;
 import com.wtsend.backend.repositories.ParticipantRepository;

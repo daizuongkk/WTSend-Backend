@@ -11,13 +11,8 @@ import lombok.experimental.FieldDefaults;
 @Setter
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class AuthResponse {
-
-	@Builder.Default
-	Boolean success = false;
-	String message;
-	String username;
 	String email;
-	String displayName;
+	boolean emailVerified;
 	String accessToken;
 	String refreshToken;
 

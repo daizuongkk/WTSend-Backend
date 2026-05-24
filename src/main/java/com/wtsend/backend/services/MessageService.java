@@ -1,7 +1,5 @@
 package com.wtsend.backend.services;
 
-import com.wtsend.backend.libs.ConversationMapper;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,20 +9,21 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.corundumstudio.socketio.SocketIOServer;
-import com.wtsend.backend.dtos.request.SendDirectMessageRequset;
+import com.wtsend.backend.dtos.request.SendDirectMessageRequest;
 import com.wtsend.backend.dtos.request.SendGroupMessageRequest;
 import com.wtsend.backend.dtos.response.MessageResponse;
 import com.wtsend.backend.dtos.response.MessagesResponse;
 import com.wtsend.backend.exceptions.ForbiddenException;
 import com.wtsend.backend.exceptions.RequestException;
 import com.wtsend.backend.exceptions.ResourceNotFoundException;
+import com.wtsend.backend.libs.ConversationMapper;
 import com.wtsend.backend.libs.MessageMapper;
 import com.wtsend.backend.libs.utils.MessageHelper;
 import com.wtsend.backend.models.Conversation;
-import com.wtsend.backend.models.ConversationType;
 import com.wtsend.backend.models.Message;
 import com.wtsend.backend.models.Participant;
 import com.wtsend.backend.models.User;
+import com.wtsend.backend.models.enums.ConversationType;
 import com.wtsend.backend.repositories.ConversationRepository;
 import com.wtsend.backend.repositories.FriendRepository;
 import com.wtsend.backend.repositories.MessageRepository;
@@ -48,7 +47,7 @@ public class MessageService implements IMessageService {
 	private final SocketIOServer server;
 
 	@Override
-	public void sendDirectMessage(SendDirectMessageRequset request, String senderId) {
+	public void sendDirectMessage(SendDirectMessageRequest request, String senderId) {
 
 		String recipientId = request.getRecipientId();
 

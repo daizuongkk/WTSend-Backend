@@ -1,9 +1,12 @@
 package com.wtsend.backend.libs.utils;
 
+import java.security.AuthProvider;
+
 import org.modelmapper.ModelMapper;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.wtsend.backend.dtos.request.SignUpRequest;
 import com.wtsend.backend.dtos.response.FriendResponse;
 import com.wtsend.backend.dtos.response.Sender;
@@ -20,8 +23,8 @@ public class UserUtils {
 
 	public User toUser(SignUpRequest request) {
 
-		return User.builder().username(request.getUsername()).password(passwordEncoder.encode(request.getPassword()))
-				.email(request.getEmail()).displayName(request.getFirstName() + " " + request.getLastName()).build();
+		return User.builder().password(passwordEncoder.encode(request.getPassword()))
+				.email(request.getEmail()).displayName(request.getEmail().split("@")[1]).build();
 	}
 
 	public UserResponse toUserResponse(User user) {
@@ -42,6 +45,16 @@ public class UserUtils {
 				.id(user.getId())
 				.displayName(user.getDisplayName())
 				.avatarUrl(user.getAvatarUrl())
+				.build();
+	}
+
+	public User googleOAuth2PayloadToEntity(GoogleIdToken.Payload payload) {
+		return User.builder()
+				.username(payload.getEmail().split("@")[0])
+				.displayName(payload.get("name").toString())
+				.email(payload.getEmail())
+				.avatarUrl(payload.get("picture").toString())
+				.emailVerified(payload.getEmailVerified())
 				.build();
 	}
 }

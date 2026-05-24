@@ -21,7 +21,7 @@ import com.wtsend.backend.models.User;
 public class JwtService {
 
 	@Value("${jwt.access-token.ttl}")
-	private Long ACCESS_TOKEN_TTL;
+	private Long accessTokenTTL;
 
 	private final JwtEncoder jwtEncoder;
 
@@ -38,12 +38,29 @@ public class JwtService {
 
 		Instant now = Instant.now();
 
-		JwtClaimsSet claimsSet = JwtClaimsSet.builder().issuer("daizuongkk").subject(user.getId())
-				.claim("username", user.getUsername())
-				.claim("avtUrl", user.getAvatarUrl() == null ? "" : user.getAvatarUrl())
+		JwtClaimsSet claimsSet = JwtClaimsSet.builder().issuer(user.getEmail()).subject(user.getId())
+				.claim("email", user.getEmail())
+				.claim("avt", user.getAvatarUrl() == null ? "" : user.getAvatarUrl())
+				.claim("emv", user.isEmailVerified())
 				.id(UUID.randomUUID().toString())
 				.issuedAt(now)
-				.expiresAt(now.plus(Duration.ofMinutes(ACCESS_TOKEN_TTL))).build();
+				.expiresAt(now.plus(Duration.ofMinutes(accessTokenTTL))).build();
+		return jwtEncoder.encode(JwtEncoderParameters.from(header, claimsSet)).getTokenValue();
+	}
+
+	public String generateToken(User user, Long tokenTTL) {
+
+		JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).type("JWT").build();
+
+		Instant now = Instant.now();
+
+		JwtClaimsSet claimsSet = JwtClaimsSet.builder().issuer(user.getEmail()).subject(user.getId())
+				.claim("email", user.getEmail())
+				.claim("avt", user.getAvatarUrl() == null ? "" : user.getAvatarUrl())
+				.claim("emv", user.isEmailVerified())
+				.id(UUID.randomUUID().toString())
+				.issuedAt(now)
+				.expiresAt(now.plus(Duration.ofMinutes(tokenTTL))).build();
 		return jwtEncoder.encode(JwtEncoderParameters.from(header, claimsSet)).getTokenValue();
 	}
 

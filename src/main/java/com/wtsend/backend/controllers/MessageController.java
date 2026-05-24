@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.wtsend.backend.dtos.request.SendDirectMessageRequset;
+import com.wtsend.backend.dtos.request.SendDirectMessageRequest;
 import com.wtsend.backend.dtos.request.SendGroupMessageRequest;
 import com.wtsend.backend.dtos.response.MessagesResponse;
 import com.wtsend.backend.services.interfaces.IMessageService;
@@ -32,7 +32,7 @@ public class MessageController {
 	}
 
 	@PostMapping("/direct")
-	public ResponseEntity<String> sendDirectMessage(@RequestBody @Valid SendDirectMessageRequset request,
+	public ResponseEntity<String> sendDirectMessage(@RequestBody @Valid SendDirectMessageRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
 		messageService.sendDirectMessage(request, jwt.getSubject());
 		return ResponseEntity.ok("Send direct message successfully");

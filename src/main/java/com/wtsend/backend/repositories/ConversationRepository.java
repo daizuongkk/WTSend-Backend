@@ -6,12 +6,10 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import com.wtsend.backend.models.Conversation;
-import com.wtsend.backend.models.ConversationType;
+import com.wtsend.backend.models.enums.ConversationType;
 
-@Repository
 public interface ConversationRepository extends JpaRepository<Conversation, Long> {
 
 	@Query("""

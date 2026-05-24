@@ -1,5 +1,6 @@
 package com.wtsend.backend.models;
 
+import java.security.AuthProvider;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -66,11 +67,13 @@ public class User implements UserDetails {
 	@GeneratedValue(strategy = GenerationType.UUID)
 	String id;
 
-	@Column(name = "username", nullable = false, unique = true)
+	@Column(name = "username", nullable = true, unique = true)
 	String username;
 
-	@Column(name = "password", nullable = false)
+	@Column(name = "password", nullable = true)
 	String password;
+
+	AuthProvider authProvider;
 
 	@Column(name = "displayName", nullable = false)
 	String displayName;
@@ -81,8 +84,16 @@ public class User implements UserDetails {
 	@Column(name = "email", nullable = false, unique = true)
 	String email;
 
+	@Column(name = "email_verified")
+	@Builder.Default
+	boolean emailVerified = false;
+
 	@Column(name = "phone", unique = true)
 	String phone;
+
+	@Column(name = "phone_verified")
+	@Builder.Default
+	boolean phoneVerified = false;
 
 	@Column(name = "avatarUrl")
 	String avatarUrl;

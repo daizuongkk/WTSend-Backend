@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 
 @Getter
-public class SendDirectMessageRequset {
+public class SendDirectMessageRequest {
 
 	@NotBlank(message = "Recipient id is required")
 	private String recipientId;

@@ -2,7 +2,7 @@ package com.wtsend.backend.dtos.request;
 
 import java.util.List;
 
-import com.wtsend.backend.models.ConversationType;
+import com.wtsend.backend.models.enums.ConversationType;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;

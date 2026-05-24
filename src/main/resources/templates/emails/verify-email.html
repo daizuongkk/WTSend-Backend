@@ -1,0 +1,118 @@
+```html
+<!-- templates/emails/verify-email.html -->
+
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+	<meta charset="UTF-8">
+	<title>Xác thực email</title>
+</head>
+
+<body style="
+    margin:0;
+    padding:40px 20px;
+    background:#f4f7fb;
+    font-family:Arial,sans-serif;
+">
+
+	<div style="
+    max-width:520px;
+    margin:auto;
+    background:#ffffff;
+    border-radius:16px;
+    overflow:hidden;
+    border:1px solid #e5e7eb;
+">
+
+		<!-- Header -->
+		<div style="
+        background:linear-gradient(135deg,#2563eb,#1d4ed8);
+        padding:32px 24px;
+        text-align:center;
+    ">
+			<h1 style="
+            margin:0;
+            color:#ffffff;
+            font-size:28px;
+        ">
+				WTSend
+			</h1>
+
+			<p style="
+            margin-top:10px;
+            color:rgba(255,255,255,0.85);
+            font-size:14px;
+        ">
+				Realtime Chat Platform
+			</p>
+		</div>
+
+		<!-- Body -->
+		<div style="padding:36px 32px;">
+
+			<h2 style="
+            margin-top:0;
+            color:#111827;
+        ">
+				Xác thực email của bạn
+			</h2>
+
+			<p style="
+            color:#4b5563;
+            line-height:1.7;
+        ">
+				Cảm ơn bạn đã đăng ký tài khoản WTSend.
+				Nhấn nút bên dưới để xác thực email của bạn.
+			</p>
+
+			<div style="
+            text-align:center;
+            margin:36px 0;
+        ">
+				<a th:href="${verifyLink}" style="
+                    display:inline-block;
+                    padding:14px 28px;
+                    background:#2563eb;
+                    color:white;
+                    text-decoration:none;
+                    border-radius:10px;
+                    font-weight:600;
+                ">
+					Xác thực email
+				</a>
+			</div>
+
+			<p style="
+            color:#6b7280;
+            font-size:14px;
+            line-height:1.7;
+        ">
+				Liên kết này sẽ hết hạn sau
+				<strong>5 phút</strong>.
+			</p>
+
+		</div>
+
+		<!-- Footer -->
+		<div style="
+        padding:20px;
+        text-align:center;
+        background:#f9fafb;
+        border-top:1px solid #e5e7eb;
+    ">
+			<p style="
+            margin:0;
+            color:#9ca3af;
+            font-size:12px;
+        ">
+				© 2026 WTSend
+			</p>
+		</div>
+
+	</div>
+
+</body>
+
+</html>
+```

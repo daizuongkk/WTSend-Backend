@@ -19,6 +19,16 @@ import jakarta.servlet.http.HttpServletRequest;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+	@ExceptionHandler(EmailException.class)
+	public ResponseEntity<ApiResponse<Void>> handleOtpException(ForbiddenException ex,
+			HttpServletRequest request) {
+		ex.printStackTrace();
+		ApiResponse<Void> response = ApiResponse.<Void>builder().success(false).message(ex.getMessage())
+				.timestamp(LocalDateTime.now()).path(request.getRequestURI()).build();
+
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
+
 	@ExceptionHandler(ForbiddenException.class)
 	public ResponseEntity<ApiResponse<Void>> handleForbiddenException(ForbiddenException ex,
 			HttpServletRequest request) {
@@ -42,7 +52,6 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(RefreshTokenException.class)
 	public ResponseEntity<ApiResponse<Void>> handleRefreshTokenException(RefreshTokenException ex,
 			HttpServletRequest request) {
-		ex.printStackTrace();
 		ApiResponse<Void> response = ApiResponse.<Void>builder().success(false).message(ex.getMessage())
 				.timestamp(LocalDateTime.now()).path(request.getRequestURI()).build();
 
