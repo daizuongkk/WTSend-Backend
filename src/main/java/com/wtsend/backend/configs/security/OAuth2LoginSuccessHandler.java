@@ -7,7 +7,7 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
-import com.wtsend.backend.models.User;
+import com.wtsend.backend.model.User;
 import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.JwtService;
 import com.wtsend.backend.services.RefreshTokenService;

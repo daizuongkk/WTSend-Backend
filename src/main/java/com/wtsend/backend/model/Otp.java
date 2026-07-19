@@ -1,6 +1,5 @@
-package com.wtsend.backend.models;
+package com.wtsend.backend.model;
 
-import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.data.annotation.Id;
@@ -14,21 +13,20 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@RedisHash("email_verification_token")
+@RedisHash("otp")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class EmailVerificationToken {
-	@Id
-	private String token;
+public class Otp {
 
+	@Id
 	@Indexed
 	private String userId;
 
-	@TimeToLive(unit = TimeUnit.MINUTES)
+	private String code;
+	private Integer attempts;
+	@TimeToLive(unit = TimeUnit.SECONDS)
 	private Long expiresIn;
-
-	private Instant cooldownUntil;
 }

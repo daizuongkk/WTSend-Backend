@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 
 import com.wtsend.backend.dto.response.FriendResponse;
 import com.wtsend.backend.libs.utils.UserUtils;
-import com.wtsend.backend.models.Friend;
+import com.wtsend.backend.model.Friend;
 import com.wtsend.backend.repository.FriendRepository;
 import com.wtsend.backend.services.interfaces.IFriendService;
 

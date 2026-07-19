@@ -4,7 +4,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Component;
 
 import com.wtsend.backend.dto.response.ParticipantResponse;
-import com.wtsend.backend.models.Participant;
+import com.wtsend.backend.model.Participant;
 
 import lombok.RequiredArgsConstructor;
 

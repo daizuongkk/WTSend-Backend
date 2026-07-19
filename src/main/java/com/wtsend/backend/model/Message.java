@@ -1,4 +1,4 @@
-package com.wtsend.backend.models;
+package com.wtsend.backend.model;
 
 import java.io.Serializable;
 import java.time.Instant;
@@ -16,40 +16,44 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.experimental.FieldDefaults;
+import lombok.Setter;
 
-@Entity
-@Data
+@Getter
+@Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-@FieldDefaults(level = AccessLevel.PRIVATE)
+@Entity
 @EntityListeners(AuditingEntityListener.class)
-
-@Table(name = "friendRequest")
-public class FriendRequest implements Serializable {
+@Table(name = "messages")
+public class Message implements Serializable {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	Long id;
-	String message;
-	@ManyToOne
-	@JoinColumn(name = "fromUser")
-	User fromUser;
+
+	private Long id;
 
 	@ManyToOne
-	@JoinColumn(name = "toUser")
-	User toUser;
+	@JoinColumn(name = "senderId")
+	private User sender;
+
+	@ManyToOne
+	@JoinColumn(name = "conversationId")
+	private Conversation conversation;
+
+	@Column(columnDefinition = "TEXT")
+	private String content;
+
+	private String imgUrl;
 
 	@Column(name = "createdAt")
 	@CreatedDate
-	Instant createdAt;
+	private Instant createdAt;
 
 	@Column(name = "updatedAt")
 	@LastModifiedDate
-	Instant updatedAt;
+	private Instant updatedAt;
 }

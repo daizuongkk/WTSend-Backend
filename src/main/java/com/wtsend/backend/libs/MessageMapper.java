@@ -7,7 +7,7 @@ import com.wtsend.backend.dto.response.LastMessage;
 import com.wtsend.backend.dto.response.MessageResponse;
 import com.wtsend.backend.dto.response.Sender;
 import com.wtsend.backend.libs.utils.UserUtils;
-import com.wtsend.backend.models.Message;
+import com.wtsend.backend.model.Message;
 
 import lombok.RequiredArgsConstructor;
 

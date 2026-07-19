@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.wtsend.backend.dto.response.AuthResponse;
-import com.wtsend.backend.models.User;
+import com.wtsend.backend.model.User;
 import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IEmailService;
 import com.wtsend.backend.services.interfaces.IUserService;

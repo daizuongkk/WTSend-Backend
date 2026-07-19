@@ -1,4 +1,4 @@
-package com.wtsend.backend.models.enums;
+package com.wtsend.backend.model.enums;
 
 public enum ConversationType {
 	DIRECT, GROUP

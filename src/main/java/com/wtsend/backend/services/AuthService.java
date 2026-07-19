@@ -19,7 +19,7 @@ import com.wtsend.backend.exceptions.DuplicateResourceException;
 import com.wtsend.backend.exceptions.RequestException;
 import com.wtsend.backend.exceptions.ResourceNotFoundException;
 import com.wtsend.backend.libs.utils.UserUtils;
-import com.wtsend.backend.models.User;
+import com.wtsend.backend.model.User;
 import com.wtsend.backend.repository.RefreshTokenRepository;
 import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IAuthService;

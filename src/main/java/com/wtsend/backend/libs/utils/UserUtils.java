@@ -11,7 +11,7 @@ import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.response.FriendResponse;
 import com.wtsend.backend.dto.response.Sender;
 import com.wtsend.backend.dto.response.UserResponse;
-import com.wtsend.backend.models.User;
+import com.wtsend.backend.model.User;
 
 import lombok.RequiredArgsConstructor;
 

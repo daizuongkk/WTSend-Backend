@@ -5,7 +5,7 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.wtsend.backend.models.FriendRequest;
+import com.wtsend.backend.model.FriendRequest;
 
 public interface FriendRequestRepository extends JpaRepository<FriendRequest, Long> {
 

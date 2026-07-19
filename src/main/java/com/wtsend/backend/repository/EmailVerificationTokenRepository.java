@@ -4,7 +4,7 @@ import java.util.Optional;
 
 import org.springframework.data.repository.CrudRepository;
 
-import com.wtsend.backend.models.EmailVerificationToken;
+import com.wtsend.backend.model.EmailVerificationToken;
 
 public interface EmailVerificationTokenRepository extends CrudRepository<EmailVerificationToken, String> {
 	void deleteAllById(String id);

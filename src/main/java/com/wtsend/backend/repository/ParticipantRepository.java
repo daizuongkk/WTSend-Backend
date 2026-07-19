@@ -9,8 +9,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.wtsend.backend.models.Participant;
-import com.wtsend.backend.models.User;
+import com.wtsend.backend.model.Participant;
+import com.wtsend.backend.model.User;
 
 public interface ParticipantRepository extends JpaRepository<Participant, Long> {
 	List<Participant> findByUser_id_In(List<String> userId);

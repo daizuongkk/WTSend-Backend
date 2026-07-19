@@ -6,9 +6,9 @@ import com.corundumstudio.socketio.SocketIOServer;
 import com.wtsend.backend.dto.response.ConversationResponse;
 import com.wtsend.backend.dto.response.MessageResponse;
 import com.wtsend.backend.exceptions.ForbiddenException;
-import com.wtsend.backend.models.Conversation;
-import com.wtsend.backend.models.Message;
-import com.wtsend.backend.models.User;
+import com.wtsend.backend.model.Conversation;
+import com.wtsend.backend.model.Message;
+import com.wtsend.backend.model.User;
 
 public class MessageHelper {
 	private MessageHelper() {

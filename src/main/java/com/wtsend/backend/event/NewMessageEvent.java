@@ -1,7 +1,8 @@
 package com.wtsend.backend.event;
 
-import com.wtsend.backend.models.Conversation;
-import com.wtsend.backend.models.Message;
+import com.wtsend.backend.model.Conversation;
+import com.wtsend.backend.model.Message;
+
 import lombok.Getter;
 
 @Getter

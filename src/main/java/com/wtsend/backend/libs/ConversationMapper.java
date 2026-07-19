@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 
 import com.wtsend.backend.dto.response.ConversationResponse;
 import com.wtsend.backend.dto.response.GroupInfoResponse;
-import com.wtsend.backend.models.Conversation;
+import com.wtsend.backend.model.Conversation;
 
 import lombok.RequiredArgsConstructor;
 

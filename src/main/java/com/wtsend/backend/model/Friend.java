@@ -1,4 +1,4 @@
-package com.wtsend.backend.models;
+package com.wtsend.backend.model;
 
 import java.io.Serializable;
 import java.time.Instant;
@@ -16,44 +16,46 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.experimental.FieldDefaults;
 
+@Data
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Entity
 @EntityListeners(AuditingEntityListener.class)
-@Table(name = "messages")
-public class Message implements Serializable {
+
+@Table(name = "friend", uniqueConstraints = @UniqueConstraint(columnNames = { "userA", "userB" }))
+@FieldDefaults(level = AccessLevel.PRIVATE)
+@Entity
+public class Friend implements Serializable {
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
-
-	private Long id;
-
-	@ManyToOne
-	@JoinColumn(name = "senderId")
-	private User sender;
+	Long id;
 
 	@ManyToOne
-	@JoinColumn(name = "conversationId")
-	private Conversation conversation;
+	@JoinColumn(name = "userA")
+	User userA;
 
-	@Column(columnDefinition = "TEXT")
-	private String content;
-
-	private String imgUrl;
+	@ManyToOne
+	@JoinColumn(name = "userB")
+	User userB;
 
 	@Column(name = "createdAt")
 	@CreatedDate
-	private Instant createdAt;
+	Instant createdAt;
 
 	@Column(name = "updatedAt")
 	@LastModifiedDate
-	private Instant updatedAt;
+	Instant updatedAt;
 }

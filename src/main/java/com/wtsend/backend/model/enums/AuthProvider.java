@@ -1,4 +1,5 @@
-package com.wtsend.backend.models.enums;
+
+package com.wtsend.backend.model.enums;
 
 public enum AuthProvider {
 	GOOGLE, FACEBOOK, LOCAL

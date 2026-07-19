@@ -9,8 +9,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.wtsend.backend.models.Conversation;
-import com.wtsend.backend.models.enums.ConversationType;
+import com.wtsend.backend.model.Conversation;
+import com.wtsend.backend.model.enums.ConversationType;
 
 public interface ConversationRepository extends JpaRepository<Conversation, Long> {
 

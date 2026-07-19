@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 
 import com.wtsend.backend.dto.RefreshToken;
 import com.wtsend.backend.exceptions.RefreshTokenException;
-import com.wtsend.backend.models.User;
+import com.wtsend.backend.model.User;
 import com.wtsend.backend.repository.RefreshTokenRepository;
 import com.wtsend.backend.repository.UserRepository;
 

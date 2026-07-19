@@ -1,66 +1,49 @@
-package com.wtsend.backend.models;
+package com.wtsend.backend.model;
 
 import java.io.Serializable;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.wtsend.backend.models.enums.ConversationType;
-
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OneToOne;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.experimental.FieldDefaults;
 
 @Entity
-@Table(name = "conversations")
-@Getter
-@Setter
-@Builder
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @EntityListeners(AuditingEntityListener.class)
-public class Conversation implements Serializable {
 
-	@OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL)
-	@Builder.Default
-	List<Participant> participants = new ArrayList<>();
-
-	@OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL)
-	@Builder.Default
-	List<Message> messages = new ArrayList<>();
-
-	@OneToOne
-	@JoinColumn(name = "lastMessageId")
-	Message lastMessage;
-
+@Table(name = "friendRequest")
+public class FriendRequest implements Serializable {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	Long id;
-	@Enumerated
-	ConversationType type;
+	String message;
+	@ManyToOne
+	@JoinColumn(name = "fromUser")
+	User fromUser;
 
-	@OneToOne(mappedBy = "conversation", cascade = CascadeType.ALL)
-	GroupInfo group;
-
-	Instant lastMessageAt;
+	@ManyToOne
+	@JoinColumn(name = "toUser")
+	User toUser;
 
 	@Column(name = "createdAt")
 	@CreatedDate
@@ -69,5 +52,4 @@ public class Conversation implements Serializable {
 	@Column(name = "updatedAt")
 	@LastModifiedDate
 	Instant updatedAt;
-
 }

@@ -1,4 +1,4 @@
-package com.wtsend.backend.models;
+package com.wtsend.backend.model;
 
 import java.io.Serializable;
 
