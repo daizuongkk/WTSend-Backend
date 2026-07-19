@@ -60,8 +60,9 @@ public class JwtConfig {
 
 			if (verified) {
 				authorities.add(new SimpleGrantedAuthority("EMAIL_VERIFIED"));
+			} else {
+				authorities.add(new SimpleGrantedAuthority("EMAIL_NOT_VERIFIED"));
 			}
-
 			return authorities;
 		});
 

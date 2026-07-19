@@ -1,7 +1,7 @@
 package com.wtsend.backend.services;
 
-import java.security.SecureRandom;
-import java.util.Base64;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -11,17 +11,18 @@ import org.springframework.stereotype.Service;
 import com.resend.Resend;
 import com.resend.services.emails.model.CreateEmailOptions;
 import com.resend.services.emails.model.CreateEmailResponse;
-import com.wtsend.backend.dtos.response.AuthResponse;
+import com.wtsend.backend.dto.response.AuthResponse;
 import com.wtsend.backend.exceptions.EmailException;
 import com.wtsend.backend.exceptions.RequestException;
+import com.wtsend.backend.exceptions.TooManyRequestException;
 import com.wtsend.backend.libs.EmailTemplateRender;
 import com.wtsend.backend.libs.TokenGenerator;
 import com.wtsend.backend.models.EmailVerificationToken;
 import com.wtsend.backend.models.Otp;
 import com.wtsend.backend.models.User;
-import com.wtsend.backend.repositories.EmailVerificationTokenRepository;
-import com.wtsend.backend.repositories.OtpRepository;
-import com.wtsend.backend.repositories.UserRepository;
+import com.wtsend.backend.repository.EmailVerificationTokenRepository;
+import com.wtsend.backend.repository.OtpRepository;
+import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IEmailService;
 
 import jakarta.annotation.PostConstruct;
@@ -67,7 +68,7 @@ public class EmailService implements IEmailService {
 	public AuthResponse verifyEmail(String token) {
 
 		EmailVerificationToken tokenEntity = emailVerificationTokenRepo
-				.findById(token)
+				.findByToken(token)
 				.orElseThrow(() -> new RequestException(
 						"Invalid or expired token"));
 		User user = userRepo.findById(
@@ -75,8 +76,8 @@ public class EmailService implements IEmailService {
 		user.setEmailVerified(true);
 		userRepo.save(user);
 
-		emailVerificationTokenRepo.deleteById(token);
-
+		emailVerificationTokenRepo.deleteAllByUserId(user.getId());
+		emailVerificationTokenRepo.delete(tokenEntity);
 		return AuthResponse.builder()
 				.email(user.getEmail())
 				.emailVerified(true)
@@ -84,19 +85,40 @@ public class EmailService implements IEmailService {
 				.refreshToken(refreshTokenService.create(user).getToken()).build();
 	}
 
+	@Override
 	public void sendVerifyLink(User user) {
 		try {
+
+			EmailVerificationToken exitsToken = emailVerificationTokenRepo.findByUserId(user.getId()).orElse(null);
+
+			if (exitsToken != null && exitsToken.getCooldownUntil() != null &&
+					exitsToken.getCooldownUntil().isAfter(Instant.now())) {
+
+				long retryAfter = Duration.between(
+						Instant.now(),
+						exitsToken.getCooldownUntil()).getSeconds();
+
+				throw new TooManyRequestException(
+						"Please wait before requesting another verification email " +
+								retryAfter);
+
+			}
+
 			String token = tokenGenerator.generateVerificationToken();
 
 			CreateEmailOptions params = CreateEmailOptions.builder().from(fromEmail).to(user.getEmail())
 					.subject("Xác thực email")
 					.html(templateRender.render("emails/verify-email", Map.of(
-							"verifyLink", frontendUrl + "email-verify?token=" + token)))
+							"verifyLink", frontendUrl + "/email-verify?token=" + token)))
 					.build();
 
 			CreateEmailResponse response = resend.emails().send(params);
+
+			emailVerificationTokenRepo.deleteAllByUserId(user.getId());
+
 			emailVerificationTokenRepo
-					.save(EmailVerificationToken.builder().token(token).userId(user.getId()).expiresIn(15L).build());
+					.save(EmailVerificationToken.builder().token(token).userId(user.getId()).expiresIn(15L)
+							.cooldownUntil(Instant.now().plusSeconds(30)).build());
 
 			log.info(
 					"Link email sent successfully. EmailId={}, To={}",

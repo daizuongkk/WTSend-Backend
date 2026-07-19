@@ -12,17 +12,24 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import com.wtsend.backend.dtos.response.ApiResponse;
+import com.wtsend.backend.dto.response.ApiResponse;
 
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+	@ExceptionHandler(TooManyRequestException.class)
+	public ResponseEntity<ApiResponse<Void>> handleTooManyRequestException(TooManyRequestException ex,
+			HttpServletRequest request) {
+		ApiResponse<Void> response = ApiResponse.<Void>builder().success(false).message(ex.getMessage())
+				.timestamp(LocalDateTime.now()).path(request.getRequestURI()).build();
+
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+	}
 
 	@ExceptionHandler(EmailException.class)
-	public ResponseEntity<ApiResponse<Void>> handleOtpException(ForbiddenException ex,
+	public ResponseEntity<ApiResponse<Void>> handleOtpException(EmailException ex,
 			HttpServletRequest request) {
-		ex.printStackTrace();
 		ApiResponse<Void> response = ApiResponse.<Void>builder().success(false).message(ex.getMessage())
 				.timestamp(LocalDateTime.now()).path(request.getRequestURI()).build();
 

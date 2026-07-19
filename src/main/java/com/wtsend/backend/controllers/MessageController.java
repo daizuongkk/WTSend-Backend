@@ -13,9 +13,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.wtsend.backend.dtos.request.SendDirectMessageRequest;
-import com.wtsend.backend.dtos.request.SendGroupMessageRequest;
-import com.wtsend.backend.dtos.response.MessagesResponse;
+import com.wtsend.backend.dto.request.SendDirectMessageRequest;
+import com.wtsend.backend.dto.request.SendGroupMessageRequest;
+import com.wtsend.backend.dto.response.MessagesResponse;
 import com.wtsend.backend.services.interfaces.IMessageService;
 
 import jakarta.validation.Valid;

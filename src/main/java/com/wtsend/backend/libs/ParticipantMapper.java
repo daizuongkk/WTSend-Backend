@@ -3,7 +3,7 @@ package com.wtsend.backend.libs;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Component;
 
-import com.wtsend.backend.dtos.response.ParticipantResponse;
+import com.wtsend.backend.dto.response.ParticipantResponse;
 import com.wtsend.backend.models.Participant;
 
 import lombok.RequiredArgsConstructor;

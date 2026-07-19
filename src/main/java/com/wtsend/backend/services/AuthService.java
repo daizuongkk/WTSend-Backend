@@ -8,20 +8,20 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.wtsend.backend.dtos.RefreshToken;
-import com.wtsend.backend.dtos.TokenPayload;
-import com.wtsend.backend.dtos.request.ChangePasswordRequest;
-import com.wtsend.backend.dtos.request.SignInRequest;
-import com.wtsend.backend.dtos.request.SignUpRequest;
-import com.wtsend.backend.dtos.response.AuthResponse;
-import com.wtsend.backend.dtos.response.UserResponse;
+import com.wtsend.backend.dto.RefreshToken;
+import com.wtsend.backend.dto.TokenPayload;
+import com.wtsend.backend.dto.request.ChangePasswordRequest;
+import com.wtsend.backend.dto.request.SignInRequest;
+import com.wtsend.backend.dto.request.SignUpRequest;
+import com.wtsend.backend.dto.response.AuthResponse;
+import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.exceptions.DuplicateResourceException;
 import com.wtsend.backend.exceptions.RequestException;
 import com.wtsend.backend.exceptions.ResourceNotFoundException;
 import com.wtsend.backend.libs.utils.UserUtils;
 import com.wtsend.backend.models.User;
-import com.wtsend.backend.repositories.RefreshTokenRepository;
-import com.wtsend.backend.repositories.UserRepository;
+import com.wtsend.backend.repository.RefreshTokenRepository;
+import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IAuthService;
 
 import lombok.RequiredArgsConstructor;
@@ -53,7 +53,7 @@ public class AuthService implements IAuthService {
 		if (!user.isEmailVerified()) {
 
 			emailService.sendVerifyLink(user);
-			return AuthResponse.builder().emailVerified(false)
+			return AuthResponse.builder().emailVerified(false).accessToken(jwtService.generateToken(user))
 					.email(user.getEmail()).build();
 		}
 

@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.stereotype.Component;
 
-import com.wtsend.backend.dtos.response.UserResponse;
+import com.wtsend.backend.dto.response.UserResponse;
 
 import lombok.Getter;
 

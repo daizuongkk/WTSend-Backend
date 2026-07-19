@@ -7,10 +7,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.wtsend.backend.dtos.request.SignUpRequest;
-import com.wtsend.backend.dtos.response.FriendResponse;
-import com.wtsend.backend.dtos.response.Sender;
-import com.wtsend.backend.dtos.response.UserResponse;
+import com.wtsend.backend.dto.request.SignUpRequest;
+import com.wtsend.backend.dto.response.FriendResponse;
+import com.wtsend.backend.dto.response.Sender;
+import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.models.User;
 
 import lombok.RequiredArgsConstructor;
@@ -24,7 +24,7 @@ public class UserUtils {
 	public User toUser(SignUpRequest request) {
 
 		return User.builder().password(passwordEncoder.encode(request.getPassword()))
-				.email(request.getEmail()).displayName(request.getEmail().split("@")[1]).build();
+				.email(request.getEmail()).displayName(request.getEmail().split("@")[0]).build();
 	}
 
 	public UserResponse toUserResponse(User user) {

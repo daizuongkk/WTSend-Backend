@@ -5,8 +5,8 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
-import com.wtsend.backend.dtos.request.AddFriendRequest;
-import com.wtsend.backend.dtos.response.FriendRequestResponse;
+import com.wtsend.backend.dto.request.AddFriendRequest;
+import com.wtsend.backend.dto.response.FriendRequestResponse;
 
 @Service
 public interface IFriendRequestService {

@@ -5,11 +5,11 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import com.wtsend.backend.dtos.RefreshToken;
+import com.wtsend.backend.dto.RefreshToken;
 import com.wtsend.backend.exceptions.RefreshTokenException;
 import com.wtsend.backend.models.User;
-import com.wtsend.backend.repositories.RefreshTokenRepository;
-import com.wtsend.backend.repositories.UserRepository;
+import com.wtsend.backend.repository.RefreshTokenRepository;
+import com.wtsend.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 

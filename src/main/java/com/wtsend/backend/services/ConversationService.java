@@ -8,8 +8,8 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 
 import com.corundumstudio.socketio.SocketIOServer;
-import com.wtsend.backend.dtos.request.CreateConversationRequest;
-import com.wtsend.backend.dtos.response.ConversationResponse;
+import com.wtsend.backend.dto.request.CreateConversationRequest;
+import com.wtsend.backend.dto.response.ConversationResponse;
 import com.wtsend.backend.exceptions.ForbiddenException;
 import com.wtsend.backend.exceptions.RequestException;
 import com.wtsend.backend.exceptions.ResourceNotFoundException;
@@ -20,10 +20,10 @@ import com.wtsend.backend.models.GroupInfo;
 import com.wtsend.backend.models.Participant;
 import com.wtsend.backend.models.User;
 import com.wtsend.backend.models.enums.ConversationType;
-import com.wtsend.backend.repositories.ConversationRepository;
-import com.wtsend.backend.repositories.FriendRepository;
-import com.wtsend.backend.repositories.ParticipantRepository;
-import com.wtsend.backend.repositories.UserRepository;
+import com.wtsend.backend.repository.ConversationRepository;
+import com.wtsend.backend.repository.FriendRepository;
+import com.wtsend.backend.repository.ParticipantRepository;
+import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IConversationService;
 
 import jakarta.persistence.EntityNotFoundException;

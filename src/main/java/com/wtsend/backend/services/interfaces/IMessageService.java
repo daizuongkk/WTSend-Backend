@@ -4,9 +4,9 @@ import java.time.Instant;
 
 import org.springframework.stereotype.Service;
 
-import com.wtsend.backend.dtos.request.SendDirectMessageRequest;
-import com.wtsend.backend.dtos.request.SendGroupMessageRequest;
-import com.wtsend.backend.dtos.response.MessagesResponse;
+import com.wtsend.backend.dto.request.SendDirectMessageRequest;
+import com.wtsend.backend.dto.request.SendGroupMessageRequest;
+import com.wtsend.backend.dto.response.MessagesResponse;
 
 @Service
 public interface IMessageService {

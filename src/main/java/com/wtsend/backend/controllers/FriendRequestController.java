@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.wtsend.backend.dtos.request.AddFriendRequest;
-import com.wtsend.backend.dtos.response.FriendRequestResponse;
+import com.wtsend.backend.dto.request.AddFriendRequest;
+import com.wtsend.backend.dto.response.FriendRequestResponse;
 import com.wtsend.backend.services.interfaces.IFriendRequestService;
 
 @RestController

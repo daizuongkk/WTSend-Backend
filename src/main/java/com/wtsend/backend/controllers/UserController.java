@@ -13,9 +13,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.wtsend.backend.dtos.request.ChangePasswordRequest;
-import com.wtsend.backend.dtos.request.UpdateUserRequest;
-import com.wtsend.backend.dtos.response.UserResponse;
+import com.wtsend.backend.dto.request.ChangePasswordRequest;
+import com.wtsend.backend.dto.request.UpdateUserRequest;
+import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.services.interfaces.IAuthService;
 import com.wtsend.backend.services.interfaces.IUserService;
 

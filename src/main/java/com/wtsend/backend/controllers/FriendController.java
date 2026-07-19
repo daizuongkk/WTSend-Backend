@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.wtsend.backend.dtos.response.FriendResponse;
+import com.wtsend.backend.dto.response.FriendResponse;
 import com.wtsend.backend.services.interfaces.IFriendService;
 
 @RestController

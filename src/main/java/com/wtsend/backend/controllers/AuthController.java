@@ -11,16 +11,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.wtsend.backend.dtos.request.GoogleAuthRequest;
-import com.wtsend.backend.dtos.request.SignInRequest;
-import com.wtsend.backend.dtos.request.SignUpRequest;
-import com.wtsend.backend.dtos.response.AuthResponse;
-import com.wtsend.backend.dtos.response.UserResponse;
+import com.wtsend.backend.dto.request.GoogleAuthRequest;
+import com.wtsend.backend.dto.request.SignInRequest;
+import com.wtsend.backend.dto.request.SignUpRequest;
+import com.wtsend.backend.dto.response.AuthResponse;
+import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.services.interfaces.IAuthService;
-import com.wtsend.backend.services.interfaces.IEmailService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,18 +30,7 @@ public class AuthController {
 
 	private final IAuthService authService;
 
-	private final IEmailService emailService;
 	private static final String REFRESH_TOKEN = "refreshToken";
-
-	@PostMapping("/verify-email")
-	public ResponseEntity<AuthResponse> verifyEmail(@RequestParam(name = "token") String token) {
-
-		AuthResponse response = emailService.verifyEmail(token);
-		ResponseCookie refreshToken = ResponseCookie.from(REFRESH_TOKEN, response.getRefreshToken()).httpOnly(true)
-				.secure(true).maxAge(Duration.ofDays(7)).path("/").sameSite("None").build();
-		return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, refreshToken.toString())
-				.body(response);
-	}
 
 	@PostMapping("/refresh")
 	public ResponseEntity<AuthResponse> refreshToken(@CookieValue(name = REFRESH_TOKEN, required = false) String req) {

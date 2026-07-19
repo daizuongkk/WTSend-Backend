@@ -3,8 +3,8 @@ package com.wtsend.backend.libs.utils;
 import java.util.Map;
 
 import com.corundumstudio.socketio.SocketIOServer;
-import com.wtsend.backend.dtos.response.ConversationResponse;
-import com.wtsend.backend.dtos.response.MessageResponse;
+import com.wtsend.backend.dto.response.ConversationResponse;
+import com.wtsend.backend.dto.response.MessageResponse;
 import com.wtsend.backend.exceptions.ForbiddenException;
 import com.wtsend.backend.models.Conversation;
 import com.wtsend.backend.models.Message;

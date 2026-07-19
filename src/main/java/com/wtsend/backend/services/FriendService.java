@@ -4,10 +4,10 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import com.wtsend.backend.dtos.response.FriendResponse;
+import com.wtsend.backend.dto.response.FriendResponse;
 import com.wtsend.backend.libs.utils.UserUtils;
 import com.wtsend.backend.models.Friend;
-import com.wtsend.backend.repositories.FriendRepository;
+import com.wtsend.backend.repository.FriendRepository;
 import com.wtsend.backend.services.interfaces.IFriendService;
 
 @Service

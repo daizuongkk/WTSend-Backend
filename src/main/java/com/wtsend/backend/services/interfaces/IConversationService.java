@@ -4,8 +4,8 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import com.wtsend.backend.dtos.request.CreateConversationRequest;
-import com.wtsend.backend.dtos.response.ConversationResponse;
+import com.wtsend.backend.dto.request.CreateConversationRequest;
+import com.wtsend.backend.dto.response.ConversationResponse;
 
 @Service
 public interface IConversationService {

@@ -12,7 +12,7 @@ import com.corundumstudio.socketio.protocol.JacksonJsonSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.wtsend.backend.dtos.response.UserResponse;
+import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.services.UserService;
 
 import lombok.RequiredArgsConstructor;

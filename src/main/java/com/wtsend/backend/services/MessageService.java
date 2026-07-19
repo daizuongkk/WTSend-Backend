@@ -4,15 +4,21 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 import com.corundumstudio.socketio.SocketIOServer;
-import com.wtsend.backend.dtos.request.SendDirectMessageRequest;
-import com.wtsend.backend.dtos.request.SendGroupMessageRequest;
-import com.wtsend.backend.dtos.response.MessageResponse;
-import com.wtsend.backend.dtos.response.MessagesResponse;
+import com.wtsend.backend.dto.request.SendDirectMessageRequest;
+import com.wtsend.backend.dto.request.SendGroupMessageRequest;
+import com.wtsend.backend.dto.response.MessageResponse;
+import com.wtsend.backend.dto.response.MessagesResponse;
+import com.wtsend.backend.event.NewMessageEvent;
 import com.wtsend.backend.exceptions.ForbiddenException;
 import com.wtsend.backend.exceptions.RequestException;
 import com.wtsend.backend.exceptions.ResourceNotFoundException;
@@ -24,27 +30,33 @@ import com.wtsend.backend.models.Message;
 import com.wtsend.backend.models.Participant;
 import com.wtsend.backend.models.User;
 import com.wtsend.backend.models.enums.ConversationType;
-import com.wtsend.backend.repositories.ConversationRepository;
-import com.wtsend.backend.repositories.FriendRepository;
-import com.wtsend.backend.repositories.MessageRepository;
-import com.wtsend.backend.repositories.UserRepository;
+import com.wtsend.backend.repository.ConversationRepository;
+import com.wtsend.backend.repository.FriendRepository;
+import com.wtsend.backend.repository.MessageRepository;
+import com.wtsend.backend.repository.ParticipantRepository;
+import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IMessageService;
 
 import jakarta.transaction.Transactional;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 
 @Service
 @Transactional
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MessageService implements IMessageService {
 
-	private final ConversationMapper conversationMapper;
-	private final UserRepository userRepository;
-	private final ConversationRepository conversationRepo;
-	private final MessageRepository messageRepo;
-	private final FriendRepository friendRepo;
-	private final MessageMapper messageMapper;
-	private final SocketIOServer server;
+	ConversationMapper conversationMapper;
+	UserRepository userRepository;
+	ConversationRepository conversationRepo;
+	MessageRepository messageRepo;
+	FriendRepository friendRepo;
+	MessageMapper messageMapper;
+	SocketIOServer server;
+	ParticipantRepository participantRepo;
+	ApplicationEventPublisher applicationEventPublisher;
 
 	@Override
 	public void sendDirectMessage(SendDirectMessageRequest request, String senderId) {
@@ -98,9 +110,9 @@ public class MessageService implements IMessageService {
 		return convo;
 	}
 
-	@Override
+	@Retryable(retryFor = { CannotAcquireLockException.class,
+			DeadlockLoserDataAccessException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
 	public void sendGroupMessage(SendGroupMessageRequest request, String senderId) {
-
 		Long conversationId = request.getConversationId();
 
 		Conversation conversation = conversationRepo.findById(conversationId)
@@ -116,10 +128,12 @@ public class MessageService implements IMessageService {
 
 		Message message = Message.builder().sender(sender).conversation(conversation).content(request.getContent()).build();
 		messageRepo.save(message);
-		MessageHelper.updateConversationAfterCreateMessage(conversation, message, senderId);
-		conversationRepo.save(conversation);
-		MessageHelper.emitNewMessage(server, conversationMapper.toResponse(conversation),
-				messageMapper.toResponse(message));
+
+		conversationRepo.updateLastMessage(conversationId, message.getCreatedAt(), message.getId());
+		participantRepo.incrementUnreadCountsForOthers(conversationId, senderId);
+		participantRepo.resetUnreadCountForSender(conversationId, senderId);
+
+		applicationEventPublisher.publishEvent(new NewMessageEvent(conversation, message));
 	}
 
 	@Override

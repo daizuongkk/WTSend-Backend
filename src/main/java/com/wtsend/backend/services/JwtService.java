@@ -14,7 +14,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 
-import com.wtsend.backend.dtos.TokenPayload;
+import com.wtsend.backend.dto.TokenPayload;
 import com.wtsend.backend.models.User;
 
 @Service

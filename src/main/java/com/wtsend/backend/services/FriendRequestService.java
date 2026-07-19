@@ -5,17 +5,17 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
-import com.wtsend.backend.dtos.request.AddFriendRequest;
-import com.wtsend.backend.dtos.response.FriendRequestResponse;
+import com.wtsend.backend.dto.request.AddFriendRequest;
+import com.wtsend.backend.dto.response.FriendRequestResponse;
 import com.wtsend.backend.exceptions.RequestException;
 import com.wtsend.backend.exceptions.ResourceNotFoundException;
 import com.wtsend.backend.libs.utils.UserUtils;
 import com.wtsend.backend.models.Friend;
 import com.wtsend.backend.models.FriendRequest;
 import com.wtsend.backend.models.User;
-import com.wtsend.backend.repositories.FriendRepository;
-import com.wtsend.backend.repositories.FriendRequestRepository;
-import com.wtsend.backend.repositories.UserRepository;
+import com.wtsend.backend.repository.FriendRepository;
+import com.wtsend.backend.repository.FriendRequestRepository;
+import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IFriendRequestService;
 
 import lombok.RequiredArgsConstructor;

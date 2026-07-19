@@ -35,7 +35,8 @@ public class SecurityConfig {
 
 	private static final String[] WHITE_LIST = {
 			"/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/login/**", "/oauth2/**", "/error",
-			"/api/auth/google"
+			"/api/auth/google", "/api/verify-email"
+
 	};
 
 	@Bean
@@ -46,10 +47,10 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.requestMatchers(WHITE_LIST).permitAll()
 						.requestMatchers(
-								"/api/auth/verify-email",
-								"/api/auth/resend-otp",
+								"/api/resend-otp",
 								"/api/users/me")
 						.authenticated()
+						.requestMatchers("/api/send-verify-email").hasAuthority("EMAIL_NOT_VERIFIED")
 						.requestMatchers("/api/**").hasAuthority("EMAIL_VERIFIED")
 						.anyRequest().authenticated())
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))

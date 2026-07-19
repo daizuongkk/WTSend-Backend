@@ -9,7 +9,7 @@ import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.annotation.OnConnect;
 import com.corundumstudio.socketio.annotation.OnDisconnect;
 import com.corundumstudio.socketio.annotation.OnEvent;
-import com.wtsend.backend.dtos.response.UserResponse;
+import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.services.UserService;
 
 import lombok.RequiredArgsConstructor;

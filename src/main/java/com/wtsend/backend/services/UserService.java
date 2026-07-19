@@ -9,15 +9,15 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.wtsend.backend.dtos.request.SignUpRequest;
-import com.wtsend.backend.dtos.request.UpdateUserRequest;
-import com.wtsend.backend.dtos.response.UserResponse;
+import com.wtsend.backend.dto.request.SignUpRequest;
+import com.wtsend.backend.dto.request.UpdateUserRequest;
+import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.exceptions.DuplicateResourceException;
 import com.wtsend.backend.exceptions.RequestException;
 import com.wtsend.backend.exceptions.ResourceNotFoundException;
 import com.wtsend.backend.libs.utils.UserUtils;
 import com.wtsend.backend.models.User;
-import com.wtsend.backend.repositories.UserRepository;
+import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IUserService;
 
 import jakarta.persistence.EntityNotFoundException;

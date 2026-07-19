@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.corundumstudio.socketio.SocketIOClient;
-import com.wtsend.backend.dtos.response.UserResponse;
+import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.services.ConversationService;
 import com.wtsend.backend.services.UserService;
 
