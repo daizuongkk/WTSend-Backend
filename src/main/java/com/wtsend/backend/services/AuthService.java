@@ -3,21 +3,19 @@ package com.wtsend.backend.services;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.wtsend.backend.dto.RefreshToken;
-import com.wtsend.backend.dto.TokenPayload;
 import com.wtsend.backend.dto.request.ChangePasswordRequest;
 import com.wtsend.backend.dto.request.SignInRequest;
 import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.response.AuthResponse;
 import com.wtsend.backend.dto.response.UserResponse;
-import com.wtsend.backend.exceptions.DuplicateResourceException;
-import com.wtsend.backend.exceptions.RequestException;
-import com.wtsend.backend.exceptions.ResourceNotFoundException;
+import com.wtsend.backend.common.exception.AppException;
+import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.utils.UserUtils;
 import com.wtsend.backend.model.User;
 import com.wtsend.backend.repository.RefreshTokenRepository;
@@ -63,7 +61,7 @@ public class AuthService implements IAuthService {
 				.build();
 	}
 
-	public AuthResponse googleLogin(String provider, String token) {
+	public AuthResponse googleLogin(String token) {
 
 		GoogleIdToken.Payload oauthPayload = googleAuthService.verify(token);
 		log.info(oauthPayload.getEmail());
@@ -77,35 +75,38 @@ public class AuthService implements IAuthService {
 				.build();
 	}
 
-	public String signOut(String token) {
-		TokenPayload payload = jwtService.parseToken(token.replace("Bearer ", "").trim());
-
-		String userId = payload.getSub();
-
-		RefreshToken deletedToken = refreshTokenRepo.findByUserId(userId)
-				.orElseThrow(() -> new ResourceNotFoundException("Not refresh token by userId: " + userId));
-
-		refreshTokenRepo.delete(deletedToken);
+	/**
+	 * Revokes only the presented refresh token. Keying off the user id would pick
+	 * an arbitrary one of their sessions and log out the wrong device, and reading
+	 * the access token would make logout impossible once that token expires.
+	 */
+	public String signOut(String refreshToken) {
+		refreshTokenService.revoke(refreshToken);
 		return "Signout successfully";
 	}
 
+	@Transactional
 	public UserResponse signUp(SignUpRequest request) {
 
 		if (userRepository.existsByEmail(request.getEmail())) {
-			throw new DuplicateResourceException("Email already exists");
+			throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
 		}
 
 		User newUser = userMapper.toUser(request);
 
-		emailService.sendVerifyLink(newUser);
-		return userMapper.toUserResponse(userRepository.save(newUser));
+		// Save first: the id is generated on persist, and sendVerifyLink stores a
+		// token keyed by it.
+		User savedUser = userRepository.save(newUser);
+		emailService.sendVerifyLink(savedUser);
+
+		return userMapper.toUserResponse(savedUser);
 
 	}
 
 	public AuthResponse refreshToken(String token) {
 
 		User user = refreshTokenService.verify(token);
-		refreshTokenRepo.deleteByUserId(user.getId());
+		refreshTokenService.revoke(token);
 
 		RefreshToken newRfToken = refreshTokenService.create(user);
 
@@ -117,19 +118,26 @@ public class AuthService implements IAuthService {
 	}
 
 	@Override
-	public void changePassword(ChangePasswordRequest request) {
-		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+	@Transactional
+	public void changePassword(ChangePasswordRequest request, String userId) {
+		// This app is an OAuth2 resource server, so the principal is a Jwt, not a
+		// User -- casting the SecurityContext principal here threw ClassCastException.
+		User user = userRepository.findById(userId)
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + userId));
 
-		User user = (User) auth.getPrincipal();
+		if (user.getPassword() == null)
+			throw new AppException(ErrorCode.NO_PASSWORD_SET).withDetail("userId=" + userId);
 
 		if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
-			throw new RequestException("Wrong current password");
+			throw new AppException(ErrorCode.WRONG_CURRENT_PASSWORD).withDetail("userId=" + userId);
 
 		}
 
 		user.setPassword(passwordEncoder.encode(request.getNewPassword()));
 		userRepository.save(user);
 
+		// Any session still holding an old refresh token must not survive.
+		refreshTokenRepo.deleteByUserId(userId);
 	}
 
 }

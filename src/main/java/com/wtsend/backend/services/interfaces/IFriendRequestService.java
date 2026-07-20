@@ -3,18 +3,15 @@ package com.wtsend.backend.services.interfaces;
 import java.util.List;
 import java.util.Map;
 
-import org.springframework.stereotype.Service;
-
 import com.wtsend.backend.dto.request.AddFriendRequest;
 import com.wtsend.backend.dto.response.FriendRequestResponse;
 
-@Service
 public interface IFriendRequestService {
-	public abstract void sendFriendRequest(String from, AddFriendRequest request);
+	void sendFriendRequest(String from, AddFriendRequest request);
 
-	public abstract void acceptFriendRequest(String from, Long id);
+	void acceptFriendRequest(String from, Long id);
 
-	public abstract void rejectFriendRequest(String from, Long id);
+	void rejectFriendRequest(String from, Long id);
 
-	public abstract Map<String, List<FriendRequestResponse>> getFriendRequests(String from);
+	Map<String, List<FriendRequestResponse>> getFriendRequests(String from);
 }

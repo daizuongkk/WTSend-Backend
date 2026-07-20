@@ -1,5 +1,7 @@
 package com.wtsend.backend.controllers;
 
+import java.util.Map;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -19,6 +21,7 @@ import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.services.interfaces.IAuthService;
 import com.wtsend.backend.services.interfaces.IUserService;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -30,7 +33,7 @@ public class UserController {
 
 	@GetMapping("/me")
 	public ResponseEntity<UserResponse> me(@AuthenticationPrincipal Jwt jwt) {
-		return ResponseEntity.ok(userService.me(jwt));
+		return ResponseEntity.ok(userService.me(jwt.getSubject()));
 	}
 
 	@GetMapping("/search")
@@ -39,24 +42,26 @@ public class UserController {
 	}
 
 	@PostMapping("/upload")
-	public ResponseEntity<String> uploadAvatar(@RequestParam(name = "img") MultipartFile file,
+	public ResponseEntity<Map<String, String>> uploadAvatar(@RequestParam(name = "img") MultipartFile file,
 			@AuthenticationPrincipal Jwt jwt) {
 		String imgUrl = userService.uploadAvatar(file, jwt.getSubject());
 
-		return ResponseEntity.ok("{\"avatarUrl\":\"" + imgUrl + "\"}");
+		return ResponseEntity.ok(Map.of("avatarUrl", imgUrl));
 	}
 
 	@PutMapping("/password")
-	public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequest request) {
+	public ResponseEntity<Void> changePassword(@RequestBody @Valid ChangePasswordRequest request,
+			@AuthenticationPrincipal Jwt jwt) {
 
-		authService.changePassword(request);
-		return ResponseEntity.ok(null);
+		authService.changePassword(request, jwt.getSubject());
+		return ResponseEntity.noContent().build();
 	}
 
 	@PutMapping("")
-	public ResponseEntity<UserResponse> updateUser(@ModelAttribute UpdateUserRequest request) {
+	public ResponseEntity<UserResponse> updateUser(@ModelAttribute @Valid UpdateUserRequest request,
+			@AuthenticationPrincipal Jwt jwt) {
 
-		return ResponseEntity.ok(userService.updateUser(request));
+		return ResponseEntity.ok(userService.updateUser(request, jwt.getSubject()));
 	}
 
 }

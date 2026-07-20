@@ -25,7 +25,7 @@ public class UpdateUserRequest {
 
 	@NotEmpty(message = "Display name is required")
 	private String displayName;
-	@Pattern(regexp = "^(0[1-9]|\\d{2}|3[01])/(0[1-9]|1[012])/(19|20)\\d{2}$", message = "Invalid date format")
+	@Pattern(regexp = "^(0[1-9]|[12]\\d|3[01])/(0[1-9]|1[012])/(19|20)\\d{2}$", message = "Invalid date format, expected dd/MM/yyyy")
 	private String birthday;
 	@Pattern(regexp = "^$|^[0-9]{10,15}$", message = "Số điện thoại không hợp lệ")
 	private String phone;

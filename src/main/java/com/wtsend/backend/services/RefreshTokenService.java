@@ -5,8 +5,9 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.wtsend.backend.common.exception.AppException;
+import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.dto.RefreshToken;
-import com.wtsend.backend.exceptions.RefreshTokenException;
 import com.wtsend.backend.model.User;
 import com.wtsend.backend.repository.RefreshTokenRepository;
 import com.wtsend.backend.repository.UserRepository;
@@ -25,13 +26,14 @@ public class RefreshTokenService {
 	public User verify(String token) {
 
 		if (token == null || token.isBlank())
-			throw new RefreshTokenException("Invalid token");
+			throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
 
 		RefreshToken rfToken = refreshTokenRepo.findById(token)
-				.orElseThrow(() -> new RefreshTokenException("Token is invalid or expired"));
+				.orElseThrow(() -> new AppException(ErrorCode.REFRESH_TOKEN_INVALID));
 
 		return userRepo.findById(rfToken.getUserId())
-				.orElseThrow(() -> new RefreshTokenException("User not found by id: " + rfToken.getUserId()));
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND)
+						.withDetail("id=" + rfToken.getUserId() + " (referenced by a live refresh token)"));
 	}
 
 	public RefreshToken create(User user) {
@@ -40,6 +42,17 @@ public class RefreshTokenService {
 
 		return refreshTokenRepo
 				.save(RefreshToken.builder().token(newRefreshToken).userId(user.getId()).expiresIn(REFRESH_TOKEN_TTL).build());
+	}
+
+	/**
+	 * Deletes the presented token only, leaving the user's other sessions alone.
+	 * Idempotent: revoking an already-gone token is not an error.
+	 */
+	public void revoke(String token) {
+		if (token == null || token.isBlank())
+			return;
+
+		refreshTokenRepo.deleteById(token);
 	}
 
 }

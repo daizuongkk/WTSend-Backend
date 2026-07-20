@@ -45,7 +45,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
 			""")
 	List<Long> getConversationId(@Param("userId") String userId);
 
-	@Modifying(clearAutomatically = true)
+	@Modifying(clearAutomatically = true, flushAutomatically = true)
 	@Query("UPDATE Conversation c SET c.lastMessageAt = :time, c.lastMessage.id = :messageId WHERE c.id = :id")
 	void updateLastMessage(@Param("id") Long id, @Param("time") Instant time, @Param("messageId") Long messageId);
 }

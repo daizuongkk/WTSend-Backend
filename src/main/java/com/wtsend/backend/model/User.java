@@ -1,6 +1,5 @@
 package com.wtsend.backend.model;
 
-import java.security.AuthProvider;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -14,9 +13,13 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import com.wtsend.backend.model.enums.AuthProvider;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -73,6 +76,9 @@ public class User implements UserDetails {
 	@Column(name = "password", nullable = true)
 	String password;
 
+	// Was java.security.AuthProvider (a JCA class) with no @Enumerated, which
+	// Hibernate mapped as a serialized blob.
+	@Enumerated(EnumType.STRING)
 	AuthProvider authProvider;
 
 	@Column(name = "displayName", nullable = false)

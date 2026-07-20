@@ -26,9 +26,13 @@ public class UserSessionService {
 			return;
 		}
 		String userId = authToken.toString();
-		UserResponse user = userService.findById(userId);
-		if (user == null) {
-			log.warn("Auth cache miss for socket {}", client.getSessionId());
+		UserResponse user;
+		try {
+			// findById throws for an unknown id, it never returns null -- unguarded,
+			// a deleted user threw straight out of netty's connect listener.
+			user = userService.findById(userId);
+		} catch (RuntimeException e) {
+			log.warn("Rejecting socket {}: no user for id {}", client.getSessionId(), userId);
 			client.disconnect();
 			return;
 		}
@@ -61,11 +65,11 @@ public class UserSessionService {
 			return;
 
 		conversationIds.forEach(ci -> {
-			client.joinRoom(ci.toString());
+			client.joinRoom(SocketRooms.conversation(ci));
 			log.info("{} joined to room {} ", user.getUsername(), ci);
 		});
 
-		client.joinRoom(user.getId());
+		client.joinRoom(SocketRooms.user(user.getId()));
 	}
 
 }

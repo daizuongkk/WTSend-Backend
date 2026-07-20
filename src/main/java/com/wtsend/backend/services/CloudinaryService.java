@@ -9,7 +9,8 @@ import org.springframework.web.multipart.MultipartFile;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.Transformation;
 import com.cloudinary.utils.ObjectUtils;
-import com.wtsend.backend.exceptions.RequestException;
+import com.wtsend.backend.common.exception.AppException;
+import com.wtsend.backend.common.exception.ErrorCode;
 
 import lombok.RequiredArgsConstructor;
 
@@ -20,7 +21,7 @@ public class CloudinaryService {
 
 	public Map<?, ?> upload(MultipartFile file) {
 		if (file == null)
-			throw new RequestException("No file uploaded");
+			throw new AppException(ErrorCode.FILE_REQUIRED);
 
 		try {
 			return cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap("folder", "wtsend/avatars",
@@ -33,7 +34,7 @@ public class CloudinaryService {
 							.quality("auto")
 							.fetchFormat("auto")));
 		} catch (IOException e) {
-			throw new RuntimeException("An error when upload avatar", e);
+			throw new AppException(ErrorCode.FILE_UPLOAD_FAILED, e);
 		}
 	}
 

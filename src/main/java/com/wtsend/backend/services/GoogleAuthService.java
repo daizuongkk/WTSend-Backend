@@ -1,5 +1,7 @@
 package com.wtsend.backend.services;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.Collections;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +19,8 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
+import com.wtsend.backend.common.exception.AppException;
+import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.services.interfaces.IOAuth2Service;
 
 import lombok.RequiredArgsConstructor;
@@ -64,15 +68,16 @@ public class GoogleAuthService implements IOAuth2Service {
 			GoogleIdToken idToken = verifier.verify(authenticate(credential));
 
 			if (idToken == null) {
-				throw new RuntimeException("Google token không hợp lệ");
+				throw new AppException(ErrorCode.GOOGLE_TOKEN_INVALID);
 			}
 
 			return idToken.getPayload();
 
-		} catch (RuntimeException e) {
-			throw e;
-		} catch (Exception e) {
-			throw new RuntimeException("Không thể verify Google token: " + e.getMessage(), e);
+			// Narrowed from catch(Exception): the previous wide catch forced a no-op
+			// `catch (RuntimeException e) { throw e; }` above it just to let the
+			// invalid-token case escape.
+		} catch (GeneralSecurityException | IOException e) {
+			throw new AppException(ErrorCode.GOOGLE_VERIFICATION_FAILED, e);
 		}
 	}
 

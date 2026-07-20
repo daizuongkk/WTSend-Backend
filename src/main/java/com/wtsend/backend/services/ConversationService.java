@@ -8,11 +8,11 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 
 import com.corundumstudio.socketio.SocketIOServer;
+import com.wtsend.backend.socket.SocketRooms;
 import com.wtsend.backend.dto.request.CreateConversationRequest;
 import com.wtsend.backend.dto.response.ConversationResponse;
-import com.wtsend.backend.exceptions.ForbiddenException;
-import com.wtsend.backend.exceptions.RequestException;
-import com.wtsend.backend.exceptions.ResourceNotFoundException;
+import com.wtsend.backend.common.exception.AppException;
+import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.ConversationMapper;
 import com.wtsend.backend.libs.MessageMapper;
 import com.wtsend.backend.model.Conversation;
@@ -26,7 +26,6 @@ import com.wtsend.backend.repository.ParticipantRepository;
 import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IConversationService;
 
-import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
@@ -62,11 +61,11 @@ public class ConversationService implements IConversationService {
 		List<String> memberIds = request.getMemberIds();
 
 		User user = userRepository.findById(userId)
-				.orElseThrow(() -> new ResourceNotFoundException("User not found by id: " + userId));
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + userId));
 
 		for (String memberId : memberIds) {
 			if (!friendRepo.existsFriendship(userId, memberId))
-				throw new ForbiddenException("Cannot create conversations with strangers");
+				throw new AppException(ErrorCode.CANNOT_CONVERSE_WITH_STRANGER).withDetail("memberId=" + memberId);
 		}
 
 		Conversation conversation = type.equals(ConversationType.DIRECT) ? createDirectConversation(user, memberIds)
@@ -74,7 +73,8 @@ public class ConversationService implements IConversationService {
 		conversationRepo.save(conversation);
 		if (type.equals(ConversationType.GROUP))
 			memberIds.forEach(
-					id -> server.getRoomOperations(id).sendEvent("new-group", conversationMapper.toResponse(conversation)));
+					id -> server.getRoomOperations(SocketRooms.user(id))
+							.sendEvent("new-group", conversationMapper.toResponse(conversation)));
 
 		return conversationMapper.toResponse(conversation);
 
@@ -84,7 +84,7 @@ public class ConversationService implements IConversationService {
 	@Transactional
 	public void markAsSeen(Long conversationId, String userId) {
 		Conversation conversation = conversationRepo.findById(conversationId)
-				.orElseThrow(() -> new EntityNotFoundException("Conversation not found with id: " + conversationId));
+				.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND).withDetail("id=" + conversationId));
 
 		if (conversation.getLastMessage() == null)
 			return;
@@ -93,8 +93,8 @@ public class ConversationService implements IConversationService {
 			return;
 
 		Participant participant = participantRepo.findByConversationIdAndUserId(conversation.getId(), userId)
-				.orElseThrow(() -> new EntityNotFoundException(
-						"Participant not found with conversation id: " + conversationId + " and user id: " + userId));
+				.orElseThrow(() -> new AppException(ErrorCode.PARTICIPANT_NOT_FOUND)
+						.withDetail("conversationId=" + conversationId + " userId=" + userId));
 
 		participant.setLastSeenMessage(conversation.getLastMessage());
 		participant.setLastReadAt(Instant.now());
@@ -102,7 +102,7 @@ public class ConversationService implements IConversationService {
 
 		participantRepo.save(participant);
 
-		server.getRoomOperations(conversationId.toString()).sendEvent("read-message",
+		server.getRoomOperations(SocketRooms.conversation(conversationId)).sendEvent("read-message",
 				Map.of("conversation", conversationMapper.toResponse(conversation), "lastMessage",
 						messageMapper.toLastMessage(conversation.getLastMessage())));
 
@@ -134,11 +134,11 @@ public class ConversationService implements IConversationService {
 		String participantId = memberIds.get(0);
 
 		if (participantId.equals(user.getId())) {
-			throw new RequestException("Cannot create conversation with yourself");
+			throw new AppException(ErrorCode.CANNOT_CONVERSE_WITH_SELF);
 		}
 
 		User participant = userRepository.findById(participantId)
-				.orElseThrow(() -> new ResourceNotFoundException("User not found by id: " + participantId));
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + participantId));
 
 		return conversationRepo
 				.findDirectConversationByUsers(participantId, user.getId(), ConversationType.DIRECT)

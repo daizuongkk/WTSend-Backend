@@ -2,13 +2,13 @@ package com.wtsend.backend.configs.security;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -35,12 +35,15 @@ public class SecurityConfig {
 
 	private static final String[] WHITE_LIST = {
 			"/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/login/**", "/oauth2/**", "/error",
-			"/api/auth/google", "/api/verify-email"
+			"/api/auth/google", "/api/verify-email",
+			// Logout only needs the refresh cookie. Gating it on EMAIL_VERIFIED left
+			// unverified users -- who do get an access token -- unable to log out.
+			"/api/auth/logout"
 
 	};
 
 	@Bean
-	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+	public SecurityFilterChain filterChain(HttpSecurity http) {
 		http.csrf(csrf -> csrf.disable()).cors(cors -> cors.configurationSource(
 				corsConfigurationSource()))
 				.authorizeHttpRequests(authorize -> authorize
@@ -74,12 +77,22 @@ public class SecurityConfig {
 		return new BCryptPasswordEncoder();
 	}
 
+	/**
+	 * Allowed origins come from config so that development patterns stay in the
+	 * local profile. {@code https://*.ngrok-free.app} with allowCredentials(true)
+	 * hands a credentialed cross-origin channel to anyone who can claim a free
+	 * ngrok subdomain -- it must never be active in a deployed environment.
+	 */
+	/**
+	 * Defaults to empty: an unconfigured profile allows no cross-origin traffic.
+	 */
+	@Value("${app.cors.allowed-origin-patterns:}")
+	private List<String> allowedOriginPatterns;
+
 	@Bean
 	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration configuration = new CorsConfiguration();
-		configuration.setAllowedOriginPatterns(List.of(
-				"http://localhost:*",
-				"https://*.ngrok-free.app"));
+		configuration.setAllowedOriginPatterns(allowedOriginPatterns);
 		configuration.setAllowedMethods(List.of(
 				"GET",
 				"POST",

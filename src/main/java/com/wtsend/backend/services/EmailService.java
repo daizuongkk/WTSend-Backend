@@ -9,12 +9,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.resend.Resend;
+import com.resend.core.exception.ResendException;
 import com.resend.services.emails.model.CreateEmailOptions;
 import com.resend.services.emails.model.CreateEmailResponse;
 import com.wtsend.backend.dto.response.AuthResponse;
-import com.wtsend.backend.exceptions.EmailException;
-import com.wtsend.backend.exceptions.RequestException;
-import com.wtsend.backend.exceptions.TooManyRequestException;
+import com.wtsend.backend.common.exception.AppException;
+import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.EmailTemplateRender;
 import com.wtsend.backend.libs.TokenGenerator;
 import com.wtsend.backend.model.EmailVerificationToken;
@@ -69,10 +69,10 @@ public class EmailService implements IEmailService {
 
 		EmailVerificationToken tokenEntity = emailVerificationTokenRepo
 				.findByToken(token)
-				.orElseThrow(() -> new RequestException(
-						"Invalid or expired token"));
-		User user = userRepo.findById(
-				tokenEntity.getUserId()).orElseThrow();
+				.orElseThrow(() -> new AppException(ErrorCode.VERIFICATION_TOKEN_INVALID));
+		User user = userRepo.findById(tokenEntity.getUserId())
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND)
+						.withDetail("id=" + tokenEntity.getUserId() + " (referenced by a verification token)"));
 		user.setEmailVerified(true);
 		userRepo.save(user);
 
@@ -86,51 +86,56 @@ public class EmailService implements IEmailService {
 	}
 
 	@Override
+	public void sendVerifyLink(String userId) {
+		sendVerifyLink(userRepo.findById(userId)
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + userId)));
+	}
+
+	@Override
 	public void sendVerifyLink(User user) {
-		try {
 
-			EmailVerificationToken exitsToken = emailVerificationTokenRepo.findByUserId(user.getId()).orElse(null);
+		EmailVerificationToken existingToken = emailVerificationTokenRepo.findByUserId(user.getId()).orElse(null);
 
-			if (exitsToken != null && exitsToken.getCooldownUntil() != null &&
-					exitsToken.getCooldownUntil().isAfter(Instant.now())) {
+		// Checked outside the try: a blanket catch here used to swallow this, so the
+		// cooldown could never reach the client.
+		if (existingToken != null && existingToken.getCooldownUntil() != null &&
+				existingToken.getCooldownUntil().isAfter(Instant.now())) {
 
-				long retryAfter = Duration.between(
-						Instant.now(),
-						exitsToken.getCooldownUntil()).getSeconds();
+			long retryAfter = Duration.between(
+					Instant.now(),
+					existingToken.getCooldownUntil()).getSeconds();
 
-				throw new TooManyRequestException(
-						"Please wait before requesting another verification email " +
-								retryAfter);
+			throw new AppException(ErrorCode.VERIFY_EMAIL_COOLDOWN)
+					.withDetail("userId=" + user.getId() + " retryAfterSeconds=" + retryAfter);
 
-			}
-
-			String token = tokenGenerator.generateVerificationToken();
-
-			CreateEmailOptions params = CreateEmailOptions.builder().from(fromEmail).to(user.getEmail())
-					.subject("Xác thực email")
-					.html(templateRender.render("emails/verify-email", Map.of(
-							"verifyLink", frontendUrl + "/email-verify?token=" + token)))
-					.build();
-
-			CreateEmailResponse response = resend.emails().send(params);
-
-			emailVerificationTokenRepo.deleteAllByUserId(user.getId());
-
-			emailVerificationTokenRepo
-					.save(EmailVerificationToken.builder().token(token).userId(user.getId()).expiresIn(15L)
-							.cooldownUntil(Instant.now().plusSeconds(30)).build());
-
-			log.info(
-					"Link email sent successfully. EmailId={}, To={}",
-					response.getId(),
-					user.getEmail());
-
-		} catch (Exception e) {
-			log.error(
-					"Failed to send verify link email to {}",
-					user.getEmail(),
-					e);
 		}
+
+		String token = tokenGenerator.generateVerificationToken();
+
+		CreateEmailOptions params = CreateEmailOptions.builder().from(fromEmail).to(user.getEmail())
+				.subject("Xác thực email")
+				.html(templateRender.render("emails/verify-email", Map.of(
+						"verifyLink", frontendUrl + "/email-verify?token=" + token)))
+				.build();
+
+		CreateEmailResponse response;
+		try {
+			response = resend.emails().send(params);
+		} catch (ResendException e) {
+			log.error("Failed to send verify link email to {}", user.getEmail(), e);
+			throw new AppException(ErrorCode.EMAIL_SEND_FAILED, e);
+		}
+
+		emailVerificationTokenRepo.deleteAllByUserId(user.getId());
+
+		emailVerificationTokenRepo
+				.save(EmailVerificationToken.builder().token(token).userId(user.getId()).expiresIn(15L)
+						.cooldownUntil(Instant.now().plusSeconds(30)).build());
+
+		log.info(
+				"Link email sent successfully. EmailId={}, To={}",
+				response.getId(),
+				user.getEmail());
 
 	}
 
@@ -158,19 +163,17 @@ public class EmailService implements IEmailService {
 					toEmail,
 					e);
 
-			throw new EmailException(
-					"Failed to send OTP email",
-					e);
+			throw new AppException(ErrorCode.EMAIL_SEND_FAILED, e);
 		}
 	}
 
 	public void verifyOtp(String userId, String inputOtp) {
 		Otp otp = otpRepository.findById(userId)
-				.orElseThrow(() -> new RuntimeException("OTP has expired or does not exist"));
+				.orElseThrow(() -> new AppException(ErrorCode.OTP_EXPIRED).withDetail("userId=" + userId));
 
 		if (otp.getAttempts() >= MAX_OTP_ATTEMPTS) {
 			otpRepository.deleteById(userId);
-			throw new EmailException("You have entered incorrectly too many times. Please resend new OTP code");
+			throw new AppException(ErrorCode.OTP_MAX_ATTEMPTS).withDetail("userId=" + userId);
 		}
 
 		boolean matched = passwordEncoder.matches(inputOtp, otp.getCode());
@@ -180,15 +183,14 @@ public class EmailService implements IEmailService {
 
 			if (newAttempts >= MAX_OTP_ATTEMPTS) {
 				otpRepository.deleteById(userId);
-				throw new EmailException("You have entered incorrectly too many times. Please resend new OTP code");
+				throw new AppException(ErrorCode.OTP_MAX_ATTEMPTS).withDetail("userId=" + userId);
 			}
 
 			otp.setAttempts(newAttempts);
 			otpRepository.save(otp);
 
-			throw new EmailException("OTP code is incorrect. You still "
-					+ (MAX_OTP_ATTEMPTS - newAttempts)
-					+ " try times");
+			throw new AppException(ErrorCode.OTP_INCORRECT)
+					.withDetail("userId=" + userId + " attemptsLeft=" + (MAX_OTP_ATTEMPTS - newAttempts));
 		}
 
 		otpRepository.deleteById(userId);

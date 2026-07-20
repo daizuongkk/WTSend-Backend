@@ -17,6 +17,8 @@ import com.wtsend.backend.dto.request.AddFriendRequest;
 import com.wtsend.backend.dto.response.FriendRequestResponse;
 import com.wtsend.backend.services.interfaces.IFriendRequestService;
 
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/api/friend-requests")
 public class FriendRequestController {
@@ -28,7 +30,7 @@ public class FriendRequestController {
 	}
 
 	@PostMapping("")
-	public ResponseEntity<String> sendFriendRequest(@RequestBody AddFriendRequest request,
+	public ResponseEntity<String> sendFriendRequest(@RequestBody @Valid AddFriendRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
 
 		friendRequestService.sendFriendRequest(jwt.getSubject(), request);

@@ -13,15 +13,14 @@ import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
-import com.corundumstudio.socketio.SocketIOServer;
 import com.wtsend.backend.dto.request.SendDirectMessageRequest;
 import com.wtsend.backend.dto.request.SendGroupMessageRequest;
+import com.wtsend.backend.dto.response.ConversationResponse;
 import com.wtsend.backend.dto.response.MessageResponse;
 import com.wtsend.backend.dto.response.MessagesResponse;
 import com.wtsend.backend.event.NewMessageEvent;
-import com.wtsend.backend.exceptions.ForbiddenException;
-import com.wtsend.backend.exceptions.RequestException;
-import com.wtsend.backend.exceptions.ResourceNotFoundException;
+import com.wtsend.backend.common.exception.AppException;
+import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.ConversationMapper;
 import com.wtsend.backend.libs.MessageMapper;
 import com.wtsend.backend.libs.utils.MessageHelper;
@@ -54,40 +53,45 @@ public class MessageService implements IMessageService {
 	MessageRepository messageRepo;
 	FriendRepository friendRepo;
 	MessageMapper messageMapper;
-	SocketIOServer server;
 	ParticipantRepository participantRepo;
 	ApplicationEventPublisher applicationEventPublisher;
 
 	@Override
+	@Retryable(retryFor = { CannotAcquireLockException.class,
+			DeadlockLoserDataAccessException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
 	public void sendDirectMessage(SendDirectMessageRequest request, String senderId) {
 
 		String recipientId = request.getRecipientId();
 
 		if (!friendRepo.existsFriendship(senderId, recipientId))
-			throw new ForbiddenException("Can't send messages because not friends yet");
-
-		String content = request.getContent();
-		Long conversationId = request.getConversationId();
+			throw new AppException(ErrorCode.NOT_FRIENDS).withDetail("recipientId=" + recipientId);
 
 		User recipient = userRepository.findById(recipientId)
-				.orElseThrow(() -> new ResourceNotFoundException("User not found by id: " + recipientId));
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + recipientId));
 
 		User sender = userRepository.findById(senderId)
-				.orElseThrow(() -> new ResourceNotFoundException("Usre not found by id: " + senderId));
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + senderId));
 
-		Conversation conversation = conversationRepo.findById(conversationId)
-				.orElseGet(() -> createNewDirectConversation(sender, recipient));
+		Conversation existing = conversationRepo.findById(request.getConversationId()).orElse(null);
 
-		Message message = new Message();
-		message.setContent(content);
-		message.setConversation(conversation);
-		message.setSender(sender);
+		Conversation conversation;
+		if (existing == null) {
+			conversation = conversationRepo.save(createNewDirectConversation(sender, recipient));
+		} else {
+			// The conversation id comes from the client and is not covered by the
+			// friendship check above, so verify it really is this pair's thread.
+			if (existing.getType() != ConversationType.DIRECT)
+				throw new AppException(ErrorCode.CONVERSATION_INVALID_TYPE);
+			MessageHelper.checkMembership(existing, sender);
+			MessageHelper.checkMembership(existing, recipient);
+			conversation = existing;
+		}
+
+		Message message = Message.builder().sender(sender).conversation(conversation)
+				.content(request.getContent()).build();
 		messageRepo.save(message);
-		MessageHelper.updateConversationAfterCreateMessage(conversation, message, senderId);
-		conversationRepo.save(conversation);
 
-		MessageHelper.emitNewMessage(server, conversationMapper.toResponse(conversation),
-				messageMapper.toResponse(message));
+		publishNewMessage(conversation, message, senderId);
 	}
 
 	private Conversation createNewDirectConversation(User sender, User recipient) {
@@ -110,51 +114,70 @@ public class MessageService implements IMessageService {
 		return convo;
 	}
 
+	@Override
 	@Retryable(retryFor = { CannotAcquireLockException.class,
 			DeadlockLoserDataAccessException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
 	public void sendGroupMessage(SendGroupMessageRequest request, String senderId) {
 		Long conversationId = request.getConversationId();
 
 		Conversation conversation = conversationRepo.findById(conversationId)
-				.orElseThrow(() -> new ResourceNotFoundException("Not found conversation with id: " + conversationId));
+				.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND).withDetail("id=" + conversationId));
 
 		if (!conversation.getType().equals(ConversationType.GROUP))
-			throw new RequestException("Conversation is invalid");
+			throw new AppException(ErrorCode.CONVERSATION_INVALID_TYPE);
 
 		User sender = userRepository.findById(senderId)
-				.orElseThrow(() -> new ResourceNotFoundException("User not found by id: " + senderId));
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + senderId));
 
 		MessageHelper.checkMembership(conversation, sender);
 
-		Message message = Message.builder().sender(sender).conversation(conversation).content(request.getContent()).build();
+		Message message = Message.builder().sender(sender).conversation(conversation).content(request.getContent())
+				.build();
 		messageRepo.save(message);
 
+		publishNewMessage(conversation, message, senderId);
+	}
+
+	/**
+	 * Maps to DTOs while the entities are still attached, then applies the counter
+	 * updates as atomic SQL and hands the DTOs to the AFTER_COMMIT listener. The
+	 * bulk updates clear the persistence context, so mapping has to happen first.
+	 */
+	private void publishNewMessage(Conversation conversation, Message message, String senderId) {
+		ConversationResponse conversationDto = conversationMapper.toResponse(conversation);
+		conversationDto.setLastMessage(messageMapper.toLastMessage(message));
+		conversationDto.setLastMessageAt(message.getCreatedAt());
+		MessageResponse messageDto = messageMapper.toResponse(message);
+
+		Long conversationId = conversation.getId();
 		conversationRepo.updateLastMessage(conversationId, message.getCreatedAt(), message.getId());
 		participantRepo.incrementUnreadCountsForOthers(conversationId, senderId);
 		participantRepo.resetUnreadCountForSender(conversationId, senderId);
 
-		applicationEventPublisher.publishEvent(new NewMessageEvent(conversation, message));
+		applicationEventPublisher.publishEvent(new NewMessageEvent(conversationDto, messageDto));
 	}
 
 	@Override
-	public MessagesResponse getMessages(Long conversationId, int limit, Instant cursor) {
+	public MessagesResponse getMessages(Long conversationId, String userId, int limit, Instant cursor) {
 
-		List<Message> messages;
+		if (participantRepo.findByConversationIdAndUserId(conversationId, userId).isEmpty())
+			throw new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED)
+					.withDetail("conversationId=" + conversationId + " userId=" + userId);
+
 		Pageable pageable = PageRequest.of(0, limit + 1);
-		if (cursor != null) {
-			messages = messageRepo.findAllByConversation_IdAndCreatedAtBeforeOrderByCreatedAtDesc(
-					conversationId,
-					cursor, PageRequest.of(0, limit + 1));
-		} else {
-			messages = messageRepo.findByConversation_IdOrderByCreatedAtDesc(conversationId, pageable);
-		}
+		List<Message> messages = cursor != null
+				? messageRepo.findAllByConversation_IdAndCreatedAtBeforeOrderByCreatedAtDesc(conversationId, cursor,
+						pageable)
+				: messageRepo.findByConversation_IdOrderByCreatedAtDesc(conversationId, pageable);
 
 		Instant nextCursor = null;
 
 		if (messages.size() > limit) {
-			Message nextMessage = messages.getLast();
-			nextCursor = nextMessage.getCreatedAt();
-			messages.remove(messages.size() - 1);
+			// Drop the probe row, then take the cursor from the last row we KEPT --
+			// the next page queries strictly before the cursor, so using the probe
+			// row would skip it permanently.
+			messages = new ArrayList<>(messages.subList(0, limit));
+			nextCursor = messages.get(limit - 1).getCreatedAt();
 		}
 
 		List<MessageResponse> messageResponses = messages.reversed().stream()
@@ -162,7 +185,6 @@ public class MessageService implements IMessageService {
 				.toList();
 
 		return MessagesResponse.builder().messages(messageResponses).nextCursor(nextCursor).build();
-
 	}
 
 }

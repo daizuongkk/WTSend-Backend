@@ -9,7 +9,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,8 +41,8 @@ public class AuthController {
 	}
 
 	@PostMapping("/google")
-	public ResponseEntity<AuthResponse> googleAuth(@RequestBody GoogleAuthRequest request) {
-		AuthResponse res = authService.googleLogin("google", request.getCredential());
+	public ResponseEntity<AuthResponse> googleAuth(@RequestBody @Valid GoogleAuthRequest request) {
+		AuthResponse res = authService.googleLogin(request.getCredential());
 		ResponseCookie refreshToken = ResponseCookie.from(REFRESH_TOKEN, res.getRefreshToken()).httpOnly(true)
 				.secure(true).maxAge(Duration.ofDays(7)).path("/").sameSite("None").build();
 
@@ -72,8 +71,9 @@ public class AuthController {
 	}
 
 	@PostMapping("/logout")
-	public ResponseEntity<String> signOut(@RequestHeader(name = "Authorization", required = false) String token) {
-		String res = authService.signOut(token);
+	public ResponseEntity<String> signOut(
+			@CookieValue(name = REFRESH_TOKEN, required = false) String refreshToken) {
+		String res = authService.signOut(refreshToken);
 		ResponseCookie deleteCookie = ResponseCookie.from(REFRESH_TOKEN, "")
 				.httpOnly(true)
 				.secure(true)

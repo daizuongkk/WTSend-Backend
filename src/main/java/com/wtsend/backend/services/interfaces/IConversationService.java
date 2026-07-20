@@ -2,20 +2,17 @@ package com.wtsend.backend.services.interfaces;
 
 import java.util.List;
 
-import org.springframework.stereotype.Service;
-
 import com.wtsend.backend.dto.request.CreateConversationRequest;
 import com.wtsend.backend.dto.response.ConversationResponse;
 
-@Service
 public interface IConversationService {
 
-	public abstract List<ConversationResponse> getConversations(String userId);
+	List<ConversationResponse> getConversations(String userId);
 
-	public abstract ConversationResponse createConversation(CreateConversationRequest request, String userId);
+	ConversationResponse createConversation(CreateConversationRequest request, String userId);
 
-	public abstract List<Long> getConversationIdsByUserId(String userId);
+	List<Long> getConversationIdsByUserId(String userId);
 
-	public abstract void markAsSeen(Long conversationId, String userId);
+	void markAsSeen(Long conversationId, String userId);
 
 }

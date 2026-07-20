@@ -1,16 +1,13 @@
 package com.wtsend.backend.socket;
 
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Service;
 
-import com.corundumstudio.socketio.HandshakeData;
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.annotation.OnConnect;
 import com.corundumstudio.socketio.annotation.OnDisconnect;
 import com.corundumstudio.socketio.annotation.OnEvent;
 import com.wtsend.backend.dto.response.UserResponse;
-import com.wtsend.backend.services.UserService;
+import com.wtsend.backend.repository.ParticipantRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,43 +18,14 @@ import lombok.extern.slf4j.Slf4j;
 public class SocketIOService {
 
 	private final UserSessionService userSession;
-	private final JwtDecoder jwtDecoder;
-	private final UserService userService;
+	private final ParticipantRepository participantRepo;
 
 	@OnConnect
 	public void onConnect(SocketIOClient client) {
-		HandshakeData handshakeData = client.getHandshakeData();
-		String token = handshakeData.getSingleUrlParam("token");
-		if (token == null || token.isEmpty()) {
-			log.warn("No token provided from: {}",
-					handshakeData.getAddress());
-			client.disconnect();
-			return;
-		}
-
-		try {
-			Jwt jwt = jwtDecoder.decode(token);
-
-			String userId = jwt.getSubject();
-
-			UserResponse user = userService.findById(userId);
-
-			if (user == null) {
-				client.disconnect();
-				return;
-			}
-
-			handshakeData.setAuthToken(userId);
-			log.info("Authorized: {}", jwt.getSubject());
-
-		} catch (Exception e) {
-			log.error("Invalid token from: {}",
-					handshakeData.getAddress());
-			client.disconnect();
-			return;
-		}
-
-		Object authToken = handshakeData.getAuthToken();
+		// The handshake already passed SocketIOConfig's AuthorizationListener, which
+		// decoded and verified the token -- re-decoding here just cost a second JWT
+		// verify and DB round trip per connection.
+		Object authToken = client.getHandshakeData().getAuthToken();
 
 		userSession.onClientConnected(authToken, client);
 		userSession.subscribeUserToConversations(client);
@@ -72,8 +40,29 @@ public class SocketIOService {
 
 	@OnEvent("join-conversation")
 	public void onJoinConversation(SocketIOClient client, String convoId) {
-		client.joinRoom(convoId);
-		log.info("{} joined to room {} ", client.getSessionId(), convoId);
+		UserResponse user = client.get("user");
+		if (user == null) {
+			client.disconnect();
+			return;
+		}
+
+		Long conversationId;
+		try {
+			conversationId = Long.valueOf(convoId);
+		} catch (NumberFormatException e) {
+			log.warn("{} sent a malformed conversation id: {}", user.getId(), convoId);
+			return;
+		}
+
+		// Without this the room id is simply trusted, so any socket could subscribe
+		// to any conversation's traffic.
+		if (participantRepo.findByConversationIdAndUserId(conversationId, user.getId()).isEmpty()) {
+			log.warn("{} tried to join conversation {} without membership", user.getId(), conversationId);
+			return;
+		}
+
+		client.joinRoom(SocketRooms.conversation(conversationId));
+		log.info("{} joined to room {} ", client.getSessionId(), conversationId);
 
 	}
 

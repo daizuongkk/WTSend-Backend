@@ -4,11 +4,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.wtsend.backend.dto.request.AddFriendRequest;
 import com.wtsend.backend.dto.response.FriendRequestResponse;
-import com.wtsend.backend.exceptions.RequestException;
-import com.wtsend.backend.exceptions.ResourceNotFoundException;
+import com.wtsend.backend.common.exception.AppException;
+import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.utils.UserUtils;
 import com.wtsend.backend.model.Friend;
 import com.wtsend.backend.model.FriendRequest;
@@ -37,30 +38,30 @@ public class FriendRequestService implements IFriendRequestService {
 		String message = request.getMessage();
 
 		if (from.equals(to)) {
-			throw new RequestException("Cannot send friend request to yourself");
+			throw new AppException(ErrorCode.CANNOT_FRIEND_SELF);
 		}
 
 		if (!userRepo.existsById(to)) {
-			throw new RequestException("User not found by id: " + to);
+			throw new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + to);
 		}
 
 		if (friendRequestRepo.existsByFromUserIdAndToUserId(from, to)
 				|| friendRequestRepo.existsByFromUserIdAndToUserId(to, from)) {
-			throw new RequestException("Friend request already sent");
+			throw new AppException(ErrorCode.FRIEND_REQUEST_ALREADY_SENT);
 		}
 
 		String low = (from.compareTo(to) > 0) ? to : from;
 		String high = (from.compareTo(to) > 0) ? from : to;
 
 		if (friendRepo.existsByUserAIdAndUserBId(low, high)) {
-			throw new RequestException("Already friends");
+			throw new AppException(ErrorCode.ALREADY_FRIENDS);
 		}
 
 		User fromUser = userRepo.findById(from)
-				.orElseThrow(() -> new RequestException("User not found"));
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + from));
 
 		User toUser = userRepo.findById(to)
-				.orElseThrow(() -> new RequestException("User not found"));
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + to));
 
 		FriendRequest friendRequest = FriendRequest.builder().fromUser(fromUser)
 				.toUser(toUser).message(message)
@@ -70,26 +71,25 @@ public class FriendRequestService implements IFriendRequestService {
 	}
 
 	@Override
+	@Transactional
 	public void acceptFriendRequest(String from, Long requestId) {
 
 		FriendRequest request = friendRequestRepo.findById(requestId)
-				.orElseThrow(() -> new ResourceNotFoundException("Friend request not found by id: " + requestId));
+				.orElseThrow(() -> new AppException(ErrorCode.FRIEND_REQUEST_NOT_FOUND).withDetail("id=" + requestId));
 
 		if (!request.getToUser().getId().equals(from)) {
-			throw new RequestException("Users do not have the right to refuse this request");
+			throw new AppException(ErrorCode.FRIEND_REQUEST_FORBIDDEN).withDetail("requestId=" + requestId + " userId=" + from);
 		}
 
-		String fromId = request.getFromUser().getId();
-		String toId = request.getToUser().getId();
+		// Already loaded on the request -- refetching them by id was two extra queries.
+		User fromUser = request.getFromUser();
+		User toUser = request.getToUser();
 
-		String low = fromId.compareTo(toId) > 0 ? toId : fromId;
-		String high = fromId.compareTo(toId) > 0 ? fromId : toId;
-
-		User userA = userRepo.findById(low)
-				.orElseThrow(() -> new ResourceNotFoundException("User not found by id: " + low));
-
-		User userB = userRepo.findById(high)
-				.orElseThrow(() -> new ResourceNotFoundException("User not found by id: " + high));
+		// Friendships are stored with a canonical (low, high) ordering so the pair
+		// is unique regardless of who sent the request.
+		boolean fromIsLow = fromUser.getId().compareTo(toUser.getId()) <= 0;
+		User userA = fromIsLow ? fromUser : toUser;
+		User userB = fromIsLow ? toUser : fromUser;
 
 		Friend friend = Friend.builder().userA(userA).userB(userB).build();
 
@@ -101,10 +101,10 @@ public class FriendRequestService implements IFriendRequestService {
 	@Override
 	public void rejectFriendRequest(String from, Long requestId) {
 		FriendRequest request = friendRequestRepo.findById(requestId)
-				.orElseThrow(() -> new ResourceNotFoundException("Friend request not found by id: " + requestId));
+				.orElseThrow(() -> new AppException(ErrorCode.FRIEND_REQUEST_NOT_FOUND).withDetail("id=" + requestId));
 
 		if (!request.getToUser().getId().equals(from)) {
-			throw new RequestException("Users do not have the right to refuse this request");
+			throw new AppException(ErrorCode.FRIEND_REQUEST_FORBIDDEN).withDetail("requestId=" + requestId + " userId=" + from);
 		}
 
 		friendRequestRepo.delete(request);
