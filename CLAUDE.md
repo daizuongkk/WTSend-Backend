@@ -10,7 +10,7 @@ WTSend backend — a real-time chat/messaging API. Spring Boot 4.1.x, Java 21, M
 
 ```bash
 ./mvnw spring-boot:run                                  # run the app (needs MySQL + Redis up)
-docker compose up -d                                    # start Redis (localhost:6379)
+docker compose up -d --wait                             # MySQL (3306) + Redis (6379)
 ./mvnw clean package                                    # build jar (runs tests)
 ./mvnw test                                             # all tests
 ./mvnw test -Dtest=BackendApplicationTests#methodName   # single test
@@ -18,7 +18,9 @@ docker compose up -d                                    # start Redis (localhost
 
 `MessageServiceTest`, `UserServiceTest` and `ErrorCodeTest` are plain Mockito/JUnit tests and run with no infrastructure. `BackendApplicationTests#contextLoads` boots the whole app, so it needs MySQL + Redis reachable — use `./mvnw clean package -DskipTests` when they aren't.
 
-MySQL must exist separately (DB `wtsend`); Hibernate `ddl-auto=update` creates/updates tables. Active profile is `local` (`application-local.properties`), which points the datasource at a Docker MySQL IP — override `spring.datasource.url` for your local DB.
+`docker-compose.yml` brings up both MySQL and Redis; Hibernate `ddl-auto=update` then creates the tables inside the `wtsend` database the image creates on first boot. Active profile is `local` (`application-local.properties`), pointing at `localhost:3306`.
+
+Compose reads `backend/.env` (gitignored) for `MYSQL_PASSWORD` and uses it as the MySQL root password, so it has to stay equal to `spring.datasource.password`. The app connects as `root` — don't add `MYSQL_USER=root`, the official image rejects that. MySQL runs with `--default-time-zone=+00:00` because every timestamp in the app is an `Instant`.
 
 ## Architecture
 

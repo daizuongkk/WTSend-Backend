@@ -1,6 +1,59 @@
 services:
+  mysql:
+    image: mysql:8.4
+    container_name: mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      # Compose reads backend/.env automatically, and that file is gitignored --
+      # so the password stays out of the repo. MYSQL_PASSWORD there already
+      # matches spring.datasource.password; the app connects as root, so do NOT
+      # add MYSQL_USER=root, the official image rejects it.
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in backend/.env}
+      # Matches the database in spring.datasource.url. Created on first boot
+      # only; Hibernate ddl-auto then creates the tables inside it.
+      MYSQL_DATABASE: wtsend
+    command:
+      # The app stores every timestamp as an Instant, i.e. UTC. Running the
+      # server in UTC keeps that round trip free of conversion surprises.
+      - --default-time-zone=+00:00
+      # Message cursors are a keyset on (createdAt, id) and Instant maps to
+      # datetime(6), so microsecond precision has to survive -- it is the
+      # default, pinned here because the pagination breaks silently without it.
+      - --explicit-defaults-for-timestamp=ON
+      # Vietnamese text and emoji in message bodies.
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # Authenticated ping: an unauthenticated one answers "mysqld is alive"
+      # while the server is still initialising the data directory.
+      test:
+        [
+          "CMD-SHELL",
+          'mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
   redis:
     image: redis:8
     container_name: redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  mysql-data:
+  redis-data:
