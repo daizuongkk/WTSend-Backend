@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -59,7 +60,11 @@ public class MessageService implements IMessageService {
 
 	@Override
 	@Retryable(retryFor = { CannotAcquireLockException.class,
-			DeadlockLoserDataAccessException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
+			DeadlockLoserDataAccessException.class,
+			// Losing the direct_key race: a retry re-reads and finds the winner.
+			// Retry advice sits outside the transaction advice, so each attempt
+			// gets a fresh transaction rather than reusing a rollback-only one.
+			DataIntegrityViolationException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
 	public void sendDirectMessage(SendDirectMessageRequest request, String senderId) {
 
 		String recipientId = request.getRecipientId();
@@ -81,8 +86,13 @@ public class MessageService implements IMessageService {
 			// Look the pair's thread up before creating one: without this, a client
 			// that lost its local state would start a second DIRECT conversation and
 			// the two users would each be reading a different half of the thread.
+			//
+			// This check still loses a genuine race, so the unique index on
+			// direct_key is the real arbiter: the loser's insert fails, @Retryable
+			// runs the whole method again in a fresh transaction, and the lookup
+			// then finds the winner's conversation.
 			conversation = conversationRepo
-					.findDirectConversationByUsers(senderId, recipientId, ConversationType.DIRECT)
+					.findByDirectKey(Conversation.directKeyOf(senderId, recipientId))
 					.orElseGet(() -> conversationRepo.save(createNewDirectConversation(sender, recipient)));
 		} else {
 			// The conversation id comes from the client and is not covered by the
@@ -118,6 +128,7 @@ public class MessageService implements IMessageService {
 		p2.setConversation(convo);
 		p2.setUnreadCounts(0L);
 
+		convo.setDirectKey(Conversation.directKeyOf(sender.getId(), recipient.getId()));
 		convo.setParticipants(new ArrayList<>(List.of(p1, p2)));
 		convo.setLastMessageAt(Instant.now());
 

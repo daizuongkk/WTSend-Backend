@@ -10,22 +10,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.wtsend.backend.model.Conversation;
-import com.wtsend.backend.model.enums.ConversationType;
 
 public interface ConversationRepository extends JpaRepository<Conversation, Long> {
 
-	@Query("""
-			    SELECT c FROM Conversation c
-			    JOIN c.participants p
-			    WHERE c.type = :type
-			      AND p.user.id IN (:user1, :user2)
-			    GROUP BY c.id
-			    HAVING COUNT(DISTINCT p.user.id) = 2
-			""")
-	Optional<Conversation> findDirectConversationByUsers(
-			@Param("user1") String user1,
-			@Param("user2") String user2,
-			@Param("type") ConversationType type);
+	/**
+	 * Exact lookup of a pair's DIRECT thread by its derived key: one indexed
+	 * equality, against the same column the unique index protects. Replaced a
+	 * GROUP BY over participants, which could not be constrained.
+	 */
+	Optional<Conversation> findByDirectKey(String directKey);
 
 	@Query("""
 			    SELECT DISTINCT c FROM Conversation c

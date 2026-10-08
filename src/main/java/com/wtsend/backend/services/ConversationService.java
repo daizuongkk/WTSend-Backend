@@ -116,6 +116,7 @@ public class ConversationService implements IConversationService {
 
 		Participant p2 = createParticipant(recipient, convo);
 
+		convo.setDirectKey(Conversation.directKeyOf(sender.getId(), recipient.getId()));
 		convo.setParticipants(new ArrayList<>(List.of(p1, p2)));
 
 		return convo;
@@ -141,7 +142,7 @@ public class ConversationService implements IConversationService {
 				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + participantId));
 
 		return conversationRepo
-				.findDirectConversationByUsers(participantId, user.getId(), ConversationType.DIRECT)
+				.findByDirectKey(Conversation.directKeyOf(user.getId(), participantId))
 				.orElseGet(() -> createNewDirectConversation(user, participant));
 	}
 

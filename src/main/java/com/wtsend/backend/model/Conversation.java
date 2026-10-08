@@ -57,6 +57,15 @@ public class Conversation implements Serializable {
 	@Enumerated
 	ConversationType type;
 
+	/**
+	 * For DIRECT conversations: the two participant ids ordered
+	 * lexicographically and joined, so (A,B) and (B,A) produce the same value.
+	 * NULL for GROUP. A unique index on this column is what actually prevents a
+	 * pair ending up with two threads -- the application check alone loses the
+	 * race between two concurrent first messages.
+	 */
+	String directKey;
+
 	@OneToOne(mappedBy = "conversation", cascade = CascadeType.ALL)
 	GroupInfo group;
 
@@ -69,5 +78,12 @@ public class Conversation implements Serializable {
 	@Column(name = "updatedAt")
 	@LastModifiedDate
 	Instant updatedAt;
+
+	/** Must agree with the SQL backfill in V2: ids are lowercase UUIDs. */
+	public static String directKeyOf(String userId, String otherUserId) {
+		return userId.compareTo(otherUserId) <= 0
+				? userId + ":" + otherUserId
+				: otherUserId + ":" + userId;
+	}
 
 }

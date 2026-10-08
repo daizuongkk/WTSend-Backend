@@ -176,7 +176,7 @@ class MessageServiceTest {
 		when(friendRepo.existsFriendship(ALICE, BOB)).thenReturn(true);
 		when(userRepository.findById(BOB)).thenReturn(Optional.of(bob));
 		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
-		when(conversationRepo.findDirectConversationByUsers(ALICE, BOB, ConversationType.DIRECT))
+		when(conversationRepo.findByDirectKey(Conversation.directKeyOf(ALICE, BOB)))
 				.thenReturn(Optional.empty());
 		when(conversationRepo.save(any(Conversation.class))).thenAnswer(inv -> inv.getArgument(0));
 		when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
@@ -195,7 +195,7 @@ class MessageServiceTest {
 		when(friendRepo.existsFriendship(ALICE, BOB)).thenReturn(true);
 		when(userRepository.findById(BOB)).thenReturn(Optional.of(bob));
 		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
-		when(conversationRepo.findDirectConversationByUsers(ALICE, BOB, ConversationType.DIRECT))
+		when(conversationRepo.findByDirectKey(Conversation.directKeyOf(ALICE, BOB)))
 				.thenReturn(Optional.of(directConversationOf(alice, bob)));
 		when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
 		when(messageMapper.toResponse(any())).thenReturn(new MessageResponse());
