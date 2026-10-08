@@ -9,7 +9,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -24,6 +24,12 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * Implements both halves: the entry point (not authenticated) and the access
  * denied handler (authenticated, but lacking the required authority).
+ *
+ * <p>
+ * Injects the Jackson 3 mapper, which is the one Boot 4 autoconfigures and the
+ * one the MVC layer serialises with, so an error body matches every other
+ * response. There is no Jackson 2 ObjectMapper bean to inject -- Jackson 2 is
+ * still on the classpath only because netty-socketio needs it.
  */
 @Component
 @RequiredArgsConstructor

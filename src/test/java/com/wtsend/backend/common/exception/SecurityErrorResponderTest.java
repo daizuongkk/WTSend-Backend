@@ -11,9 +11,9 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Both halves used to be unwired: 401s fell back to sendError and 403s -- the
@@ -22,9 +22,9 @@ import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
  */
 class SecurityErrorResponderTest {
 
-	// Mirrors the mapper Boot auto-configures: ErrorResponse.timestamp is an
-	// Instant, which a bare ObjectMapper cannot serialize.
-	private final ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
+	// Jackson 3, matching the JsonMapper bean Boot 4 autoconfigures -- there is no
+	// Jackson 2 ObjectMapper bean in the context.
+	private final ObjectMapper objectMapper = JsonMapper.builder().build();
 	private SecurityErrorResponder responder;
 	private MockHttpServletRequest request;
 	private MockHttpServletResponse response;
@@ -47,6 +47,9 @@ class SecurityErrorResponderTest {
 		assertThat(body.get("success").asBoolean()).isFalse();
 		assertThat(body.get("code").asInt()).isEqualTo(ErrorCode.UNAUTHENTICATED.getCode());
 		assertThat(body.get("path").asText()).isEqualTo("/api/conversations");
+		// (NON_NULL) on ErrorResponse must still be honoured by Jackson 3,
+		// or a plain failure would carry a null "errors" field.
+		assertThat(body.has("errors")).isFalse();
 	}
 
 	@Test
