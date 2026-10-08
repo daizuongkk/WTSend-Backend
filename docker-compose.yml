@@ -18,10 +18,6 @@ services:
       # The app stores every timestamp as an Instant, i.e. UTC. Running the
       # server in UTC keeps that round trip free of conversion surprises.
       - --default-time-zone=+00:00
-      # Message cursors are a keyset on (createdAt, id) and Instant maps to
-      # datetime(6), so microsecond precision has to survive -- it is the
-      # default, pinned here because the pagination breaks silently without it.
-      - --explicit-defaults-for-timestamp=ON
       # Vietnamese text and emoji in message bodies.
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
