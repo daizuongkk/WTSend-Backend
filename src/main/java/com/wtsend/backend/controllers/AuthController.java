@@ -74,12 +74,18 @@ public class AuthController {
 	public ResponseEntity<String> signOut(
 			@CookieValue(name = REFRESH_TOKEN, required = false) String refreshToken) {
 		String res = authService.signOut(refreshToken);
+
+		// Revoking the token in Redis is not enough: without an expiring Set-Cookie the
+		// browser keeps sending the dead cookie on every request. The attributes must
+		// match the cookie that was set, or the browser ignores the deletion.
 		ResponseCookie deleteCookie = ResponseCookie.from(REFRESH_TOKEN, "")
 				.httpOnly(true)
 				.secure(true)
 				.path("/")
-				.maxAge(0).sameSite("None")
+				.maxAge(0)
+				.sameSite("None")
 				.build();
+
 		return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, deleteCookie.toString()).body(res);
 	}
 

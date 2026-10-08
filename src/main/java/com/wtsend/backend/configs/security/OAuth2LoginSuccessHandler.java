@@ -7,6 +7,7 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
 import com.wtsend.backend.model.User;
 import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.JwtService;
@@ -30,7 +31,16 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 			Authentication authentication) throws IOException {
 
 		OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
+		if (Objects.isNull(oAuth2User)) {
+			response.sendError(HttpServletResponse.SC_BAD_REQUEST, "OAuth2 principal is null");
+			return;
+		}
+
 		String email = oAuth2User.getAttribute("email");
+		if (email == null || email.isBlank()) {
+			response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Email not provided by OAuth2 provider");
+			return;
+		}
 
 		User user = userRepository.findByEmail(email)
 				.orElseGet(() -> createUser(oAuth2User));

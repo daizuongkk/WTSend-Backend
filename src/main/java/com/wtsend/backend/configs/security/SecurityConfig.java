@@ -82,8 +82,6 @@ public class SecurityConfig {
 	 * local profile. {@code https://*.ngrok-free.app} with allowCredentials(true)
 	 * hands a credentialed cross-origin channel to anyone who can claim a free
 	 * ngrok subdomain -- it must never be active in a deployed environment.
-	 */
-	/**
 	 * Defaults to empty: an unconfigured profile allows no cross-origin traffic.
 	 */
 	@Value("${app.cors.allowed-origin-patterns:}")
