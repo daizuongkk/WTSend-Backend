@@ -1,7 +1,6 @@
 package com.wtsend.backend.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 
 @Getter
@@ -10,7 +9,8 @@ public class SendDirectMessageRequest {
 	@NotBlank(message = "Recipient id is required")
 	private String recipientId;
 
-	@NotNull(message = "conversation id is required")
+	// Null on the first message to a friend: the client has no conversation yet.
+	// MessageService resolves or creates it.
 	private Long conversationId;
 
 	private String imgUrl;

@@ -27,6 +27,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.wtsend.backend.dto.request.SendDirectMessageRequest;
+import com.wtsend.backend.dto.response.ConversationResponse;
 import com.wtsend.backend.dto.response.MessageResponse;
 import com.wtsend.backend.dto.response.MessagesResponse;
 import com.wtsend.backend.common.exception.AppException;
@@ -207,6 +208,62 @@ class MessageServiceTest {
 		}
 
 		assertThat(seen).containsExactlyInAnyOrder(0L, 1L, 2L, 3L, 4L, 5L, 6L);
+	}
+
+	@Test
+	void sendDirectMessageWithoutAConversationIdStartsTheThread() {
+		// The very first message to a new friend: the client has no conversation id
+		// to send. @NotNull on the DTO used to reject this outright, which made the
+		// create-conversation branch below unreachable.
+		when(friendRepo.existsFriendship(ALICE, BOB)).thenReturn(true);
+		when(userRepository.findById(BOB)).thenReturn(Optional.of(bob));
+		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
+		when(conversationRepo.findDirectConversationByUsers(ALICE, BOB, ConversationType.DIRECT))
+				.thenReturn(Optional.empty());
+		when(conversationRepo.save(any(Conversation.class))).thenAnswer(inv -> inv.getArgument(0));
+		when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
+		when(messageMapper.toResponse(any())).thenReturn(new MessageResponse());
+
+		messageService.sendDirectMessage(directRequest(BOB, null, "hi"), ALICE);
+
+		verify(conversationRepo).save(any(Conversation.class));
+		verify(messageRepo).save(any(Message.class));
+	}
+
+	@Test
+	void sendDirectMessageWithoutAConversationIdReusesThePairsThread() {
+		// A client that lost its local state must not start a second DIRECT thread --
+		// the two users would each end up reading a different half of the history.
+		when(friendRepo.existsFriendship(ALICE, BOB)).thenReturn(true);
+		when(userRepository.findById(BOB)).thenReturn(Optional.of(bob));
+		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
+		when(conversationRepo.findDirectConversationByUsers(ALICE, BOB, ConversationType.DIRECT))
+				.thenReturn(Optional.of(directConversationOf(alice, bob)));
+		when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
+		when(messageMapper.toResponse(any())).thenReturn(new MessageResponse());
+
+		messageService.sendDirectMessage(directRequest(BOB, null, "hi again"), ALICE);
+
+		verify(conversationRepo, never()).save(any(Conversation.class));
+		verify(messageRepo).save(any(Message.class));
+	}
+
+	@Test
+	void sendDirectMessageRejectsAnUnknownConversationId() {
+		// Previously an id that matched nothing fell through to the create branch and
+		// silently opened a new conversation instead of reporting the bad id.
+		when(friendRepo.existsFriendship(ALICE, BOB)).thenReturn(true);
+		when(userRepository.findById(BOB)).thenReturn(Optional.of(bob));
+		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
+		when(conversationRepo.findById(CONVO_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> messageService.sendDirectMessage(directRequest(BOB, CONVO_ID, "hi"), ALICE))
+				.isInstanceOf(AppException.class)
+				.extracting(ex -> ((AppException) ex).getErrorCode())
+				.isEqualTo(ErrorCode.CONVERSATION_NOT_FOUND);
+
+		verify(conversationRepo, never()).save(any(Conversation.class));
+		verify(messageRepo, never()).save(any());
 	}
 
 	/** Mimics the repository: newest-first, strictly before the cursor, limited. */

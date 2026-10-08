@@ -72,14 +72,23 @@ public class MessageService implements IMessageService {
 		User sender = userRepository.findById(senderId)
 				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + senderId));
 
-		Conversation existing = conversationRepo.findById(request.getConversationId()).orElse(null);
+		Long requestedId = request.getConversationId();
 
 		Conversation conversation;
-		if (existing == null) {
-			conversation = conversationRepo.save(createNewDirectConversation(sender, recipient));
+		if (requestedId == null) {
+			// First message to this friend -- the client has no conversation id yet.
+			// Look the pair's thread up before creating one: without this, a client
+			// that lost its local state would start a second DIRECT conversation and
+			// the two users would each be reading a different half of the thread.
+			conversation = conversationRepo
+					.findDirectConversationByUsers(senderId, recipientId, ConversationType.DIRECT)
+					.orElseGet(() -> conversationRepo.save(createNewDirectConversation(sender, recipient)));
 		} else {
 			// The conversation id comes from the client and is not covered by the
 			// friendship check above, so verify it really is this pair's thread.
+			Conversation existing = conversationRepo.findById(requestedId)
+					.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND)
+							.withDetail("id=" + requestedId));
 			if (existing.getType() != ConversationType.DIRECT)
 				throw new AppException(ErrorCode.CONVERSATION_INVALID_TYPE);
 			MessageHelper.checkMembership(existing, sender);
