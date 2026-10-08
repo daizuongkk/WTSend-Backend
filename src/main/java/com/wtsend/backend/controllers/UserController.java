@@ -18,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.wtsend.backend.dto.request.ChangePasswordRequest;
 import com.wtsend.backend.dto.request.UpdateUserRequest;
 import com.wtsend.backend.dto.response.UserResponse;
+import com.wtsend.backend.dto.response.UserSummaryResponse;
 import com.wtsend.backend.services.interfaces.IAuthService;
 import com.wtsend.backend.services.interfaces.IUserService;
 
@@ -37,7 +38,7 @@ public class UserController {
 	}
 
 	@GetMapping("/search")
-	public ResponseEntity<UserResponse> searchUserByUsername(@RequestParam(name = "username") String username) {
+	public ResponseEntity<UserSummaryResponse> searchUserByUsername(@RequestParam(name = "username") String username) {
 		return ResponseEntity.ok(userService.findByUsername(username));
 	}
 

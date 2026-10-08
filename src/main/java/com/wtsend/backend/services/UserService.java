@@ -10,6 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.request.UpdateUserRequest;
 import com.wtsend.backend.dto.response.UserResponse;
+import com.wtsend.backend.dto.response.UserSummaryResponse;
 import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.utils.UserUtils;
@@ -55,14 +56,21 @@ public class UserService implements IUserService {
 		return userMapper.toUserResponse(user);
 	}
 
-	public UserResponse findByUsername(String username) {
+	public UserSummaryResponse findByUsername(String username) {
 		if (username == null || username.trim().isBlank())
 			throw new AppException(ErrorCode.USERNAME_REQUIRED);
 
 		User user = userRepository.findByUsername(username)
 				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("username=" + username));
 
-		return userMapper.toUserResponse(user);
+		// Not the full profile: search crosses users who have no relationship, so
+		// it must not hand out email, phone, birthday or the verification flags.
+		return UserSummaryResponse.builder()
+				.id(user.getId())
+				.username(user.getUsername())
+				.displayName(user.getDisplayName())
+				.avatarUrl(user.getAvatarUrl())
+				.build();
 	}
 
 	public String uploadAvatar(MultipartFile file, String userId) {
@@ -111,7 +119,10 @@ public class UserService implements IUserService {
 			existUser.setBio(request.getBio());
 
 		if (request.getBirthday() != null) {
-			existUser.setBirthday(LocalDate.parse(request.getBirthday(), BIRTHDAY_FORMAT));
+			// Empty clears it, the same contract as phone.
+			existUser.setBirthday(request.getBirthday().isBlank()
+					? null
+					: LocalDate.parse(request.getBirthday(), BIRTHDAY_FORMAT));
 		}
 
 		if (request.getAvatar() != null) {
