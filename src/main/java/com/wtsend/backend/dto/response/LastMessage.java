@@ -16,6 +16,7 @@ import lombok.Setter;
 public class LastMessage {
 	private Long id;
 	private String content;
+	private String imgUrl;
 	private Instant createdAt;
 	private Instant updatedAt;
 	private Sender sender;

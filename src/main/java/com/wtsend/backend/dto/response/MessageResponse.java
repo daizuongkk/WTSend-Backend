@@ -18,6 +18,7 @@ public class MessageResponse {
 	private Sender sender;
 	private Long conversationId;
 	private String content;
+	private String imgUrl;
 	private Instant createdAt;
 	private Instant updatedAt;
 

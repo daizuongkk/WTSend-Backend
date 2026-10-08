@@ -20,6 +20,7 @@ public class MessageMapper {
 
 	public LastMessage toLastMessage(Message message) {
 		return LastMessage.builder().id(message.getId()).content(message.getContent())
+				.imgUrl(message.getImgUrl())
 				.createdAt(message.getCreatedAt()).updatedAt(message.getUpdatedAt())
 				.sender(Sender.builder().id(message.getSender().getId())
 						.avatarUrl(message.getSender().getAvatarUrl())

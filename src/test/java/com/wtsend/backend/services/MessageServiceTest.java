@@ -17,6 +17,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -264,6 +265,27 @@ class MessageServiceTest {
 
 		verify(conversationRepo, never()).save(any(Conversation.class));
 		verify(messageRepo, never()).save(any());
+	}
+
+	@Test
+	void sendDirectMessagePersistsTheAttachedImage() {
+		// imgUrl was accepted and validated by the DTO but never read, so
+		// Message.imgUrl stayed null and image messages arrived empty.
+		when(friendRepo.existsFriendship(ALICE, BOB)).thenReturn(true);
+		when(userRepository.findById(BOB)).thenReturn(Optional.of(bob));
+		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
+		when(conversationRepo.findById(CONVO_ID)).thenReturn(Optional.of(directConversationOf(alice, bob)));
+		when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
+		when(messageMapper.toResponse(any())).thenReturn(new MessageResponse());
+
+		SendDirectMessageRequest request = directRequest(BOB, CONVO_ID, "look");
+		ReflectionTestUtils.setField(request, "imgUrl", "https://res.cloudinary.com/x.png");
+
+		messageService.sendDirectMessage(request, ALICE);
+
+		ArgumentCaptor<Message> saved = ArgumentCaptor.forClass(Message.class);
+		verify(messageRepo).save(saved.capture());
+		assertThat(saved.getValue().getImgUrl()).isEqualTo("https://res.cloudinary.com/x.png");
 	}
 
 	/** Mimics the repository: newest-first, strictly before the cursor, limited. */

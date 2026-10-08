@@ -43,6 +43,13 @@ class SendDirectMessageRequestTest {
 		return r;
 	}
 
+	private static SendDirectMessageRequest imageRequest(String recipientId, String imgUrl) {
+		SendDirectMessageRequest r = new SendDirectMessageRequest();
+		ReflectionTestUtils.setField(r, "recipientId", recipientId);
+		ReflectionTestUtils.setField(r, "imgUrl", imgUrl);
+		return r;
+	}
+
 	@Test
 	void aNullConversationIdIsValid() {
 		// The first message to a friend carries no conversation id. @NotNull here
@@ -51,6 +58,20 @@ class SendDirectMessageRequestTest {
 				.validate(request("bob-id", null, "hi"));
 
 		assertThat(violations).isEmpty();
+	}
+
+	@Test
+	void anImageOnlyMessageIsValid() {
+		// content was @NotBlank, so a message that is just an attached image was
+		// rejected -- yet imgUrl was accepted by the DTO and then never read.
+		assertThat(validator.validate(imageRequest("bob-id", "https://res.cloudinary.com/x.png"))).isEmpty();
+	}
+
+	@Test
+	void aMessageWithNeitherTextNorImageIsRejected() {
+		assertThat(validator.validate(request("bob-id", null, "   ")))
+				.extracting(v -> v.getPropertyPath().toString())
+				.containsExactly("textOrImagePresent");
 	}
 
 	@Test

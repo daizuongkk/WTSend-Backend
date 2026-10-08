@@ -97,7 +97,7 @@ public class MessageService implements IMessageService {
 		}
 
 		Message message = Message.builder().sender(sender).conversation(conversation)
-				.content(request.getContent()).build();
+				.content(request.getContent()).imgUrl(request.getImgUrl()).build();
 		messageRepo.save(message);
 
 		publishNewMessage(conversation, message, senderId);
@@ -141,7 +141,7 @@ public class MessageService implements IMessageService {
 		MessageHelper.checkMembership(conversation, sender);
 
 		Message message = Message.builder().sender(sender).conversation(conversation).content(request.getContent())
-				.build();
+				.imgUrl(request.getImgUrl()).build();
 		messageRepo.save(message);
 
 		publishNewMessage(conversation, message, senderId);
