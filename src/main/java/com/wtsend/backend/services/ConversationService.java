@@ -3,15 +3,15 @@ package com.wtsend.backend.services;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.corundumstudio.socketio.SocketIOServer;
-import com.wtsend.backend.socket.SocketRooms;
 import com.wtsend.backend.dto.request.CreateConversationRequest;
 import com.wtsend.backend.dto.response.ConversationResponse;
+import com.wtsend.backend.event.ConversationCreatedEvent;
+import com.wtsend.backend.event.ConversationReadEvent;
 import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.ConversationMapper;
@@ -39,7 +39,7 @@ public class ConversationService implements IConversationService {
 	private final FriendRepository friendRepo;
 	private final ConversationMapper conversationMapper;
 	private final ParticipantRepository participantRepo;
-	private final SocketIOServer server;
+	private final ApplicationEventPublisher eventPublisher;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -59,6 +59,11 @@ public class ConversationService implements IConversationService {
 	}
 
 	@Override
+	// Was unannotated, so the membership checks, the save and the broadcast were
+	// three unrelated units of work. It also has to be transactional for the
+	// AFTER_COMMIT listener to fire at all -- without a transaction Spring drops
+	// the event silently, and new-group would simply stop being delivered.
+	@Transactional
 	public ConversationResponse createConversation(CreateConversationRequest request, String userId) {
 		ConversationType type = request.getType();
 		String name = request.getName();
@@ -67,27 +72,36 @@ public class ConversationService implements IConversationService {
 		User user = userRepository.findById(userId)
 				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + userId));
 
-		for (String memberId : memberIds) {
-			if (!friendRepo.existsFriendship(userId, memberId))
-				throw new AppException(ErrorCode.CANNOT_CONVERSE_WITH_STRANGER).withDetail("memberId=" + memberId);
-		}
+		// One query for the whole member list rather than one per member.
+		List<User> strangers = friendRepo.findNonFriendsAmong(userId, memberIds);
+		if (!strangers.isEmpty())
+			throw new AppException(ErrorCode.CANNOT_CONVERSE_WITH_STRANGER)
+					.withDetail("memberIds=" + strangers.stream().map(User::getId).toList());
 
 		Conversation conversation = type.equals(ConversationType.DIRECT) ? createDirectConversation(user, memberIds)
 				: createGroupConversation(user, memberIds, name);
 		conversationRepo.save(conversation);
-		if (type.equals(ConversationType.GROUP))
-			memberIds.forEach(
-					id -> server.getRoomOperations(SocketRooms.user(id))
-							.sendEvent("new-group", conversationMapper.toResponse(conversation)));
 
-		return conversationMapper.toResponse(conversation);
+		ConversationResponse response = conversationMapper.toResponse(conversation);
 
+		if (type.equals(ConversationType.GROUP)) {
+			// Every participant, creator included: memberIds leaves the creator out,
+			// so their other tabs and devices never heard about the new group.
+			List<String> recipients = conversation.getParticipants().stream()
+					.map(participant -> participant.getUser().getId())
+					.toList();
+			eventPublisher.publishEvent(new ConversationCreatedEvent(response, recipients));
+		}
+
+		return response;
 	}
 
 	@Override
 	@Transactional
 	public void markAsSeen(Long conversationId, String userId) {
-		Conversation conversation = conversationRepo.findById(conversationId)
+		// Fetch the whole graph up front: the response built below walks
+		// participants, lastMessage and group, each of which is lazy now.
+		Conversation conversation = conversationRepo.findByIdWithGraph(conversationId)
 				.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND).withDetail("id=" + conversationId));
 
 		if (conversation.getLastMessage() == null)
@@ -106,9 +120,12 @@ public class ConversationService implements IConversationService {
 
 		participantRepo.save(participant);
 
-		server.getRoomOperations(SocketRooms.conversation(conversationId)).sendEvent("read-message",
-				Map.of("conversation", conversationMapper.toResponse(conversation), "lastMessage",
-						messageMapper.toLastMessage(conversation.getLastMessage())));
+		// Mapped here, while the entities are attached; broadcast by the
+		// AFTER_COMMIT listener. Emitting from inside this method told clients a
+		// message had been read before the write was durable.
+		eventPublisher.publishEvent(new ConversationReadEvent(
+				conversationMapper.toResponse(conversation),
+				messageMapper.toLastMessage(conversation.getLastMessage())));
 
 	}
 

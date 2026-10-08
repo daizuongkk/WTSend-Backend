@@ -21,6 +21,24 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
 	Optional<Conversation> findByDirectKey(String directKey);
 
 	/**
+	 * Single conversation with the same graph {@link #findConversations} fetches,
+	 * so mapping one does not cost a query per association. Used wherever a
+	 * ConversationResponse is built from an id.
+	 */
+	@Query("""
+			    SELECT c FROM Conversation c
+			    LEFT JOIN FETCH c.participants p
+			    LEFT JOIN FETCH p.user
+			    LEFT JOIN FETCH p.lastSeenMessage
+			    LEFT JOIN FETCH c.lastMessage lm
+			    LEFT JOIN FETCH lm.sender
+			    LEFT JOIN FETCH c.group g
+			    LEFT JOIN FETCH g.creator
+			    WHERE c.id = :id
+			""")
+	Optional<Conversation> findByIdWithGraph(@Param("id") Long id);
+
+	/**
 	 * Every association ConversationMapper reads is fetched here, in one query.
 	 * Without the fetch joins this is a textbook N+1: one query for the list,
 	 * then per conversation another for its participants, one per participant

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.wtsend.backend.model.Friend;
+import com.wtsend.backend.model.User;
 
 public interface FriendRepository extends JpaRepository<Friend, Long> {
 
@@ -34,4 +35,20 @@ public interface FriendRepository extends JpaRepository<Friend, Long> {
 	boolean existsFriendship(
 			@Param("userId1") String userId1,
 			@Param("userId2") String userId2);
+
+	/**
+	 * The ids from {@code others} that are NOT friends with {@code userId}.
+	 * One query instead of one per member, and it names the offenders so the
+	 * caller can report which one failed.
+	 */
+	@Query("""
+			    SELECT other FROM User other
+			    WHERE other.id IN :others
+			      AND NOT EXISTS (
+			        SELECT 1 FROM Friend f
+			        WHERE (f.userA.id = :userId AND f.userB.id = other.id)
+			           OR (f.userA.id = other.id AND f.userB.id = :userId)
+			      )
+			""")
+	List<User> findNonFriendsAmong(@Param("userId") String userId, @Param("others") List<String> others);
 }
