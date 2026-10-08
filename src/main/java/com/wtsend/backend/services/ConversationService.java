@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.corundumstudio.socketio.SocketIOServer;
 import com.wtsend.backend.socket.SocketRooms;
@@ -26,7 +27,6 @@ import com.wtsend.backend.repository.ParticipantRepository;
 import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IConversationService;
 
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -42,11 +42,15 @@ public class ConversationService implements IConversationService {
 	private final SocketIOServer server;
 
 	@Override
+	@Transactional(readOnly = true)
 	public List<Long> getConversationIdsByUserId(String userId) {
 		return conversationRepo.getConversationId(userId);
 	}
 
 	@Override
+	// open-in-view is off, so the session must be held open here: the mapper
+	// walks participants, lastMessage and group, all of which are now lazy.
+	@Transactional(readOnly = true)
 	public List<ConversationResponse> getConversations(String userId) {
 		List<Conversation> conversations = conversationRepo.findConversations(userId);
 

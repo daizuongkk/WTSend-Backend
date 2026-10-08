@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.wtsend.backend.dto.request.SendDirectMessageRequest;
 import com.wtsend.backend.dto.request.SendGroupMessageRequest;
@@ -38,7 +39,6 @@ import com.wtsend.backend.repository.ParticipantRepository;
 import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IMessageService;
 
-import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -179,6 +179,7 @@ public class MessageService implements IMessageService {
 	}
 
 	@Override
+	@Transactional(readOnly = true)
 	public MessagesResponse getMessages(Long conversationId, String userId, int limit, String cursor) {
 
 		if (participantRepo.findByConversationIdAndUserId(conversationId, userId).isEmpty())

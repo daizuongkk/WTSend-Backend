@@ -10,6 +10,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -39,18 +40,18 @@ public class Participant implements Serializable {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	Long id;
 
-	@ManyToOne
+	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "conversationId")
 	private Conversation conversation;
 
-	@ManyToOne
+	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "userId")
 	User user;
 
 	Instant lastReadAt;
 	Long unreadCounts;
 	Instant joinedAt;
-	@ManyToOne
+	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "lastSeenMessageId")
 	Message lastSeenMessage;
 

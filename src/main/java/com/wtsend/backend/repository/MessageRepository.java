@@ -18,6 +18,7 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 	 */
 	@Query("""
 			    SELECT m FROM Message m
+			    JOIN FETCH m.sender
 			    WHERE m.conversation.id = :conversationId
 			    ORDER BY m.createdAt DESC, m.id DESC
 			""")
@@ -30,6 +31,7 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 	 */
 	@Query("""
 			    SELECT m FROM Message m
+			    JOIN FETCH m.sender
 			    WHERE m.conversation.id = :conversationId
 			      AND (m.createdAt < :createdAt
 			           OR (m.createdAt = :createdAt AND m.id < :id))
