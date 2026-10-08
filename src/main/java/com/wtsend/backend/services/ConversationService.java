@@ -161,7 +161,10 @@ public class ConversationService implements IConversationService {
 		}
 		participants.add(createParticipant(user, conversation));
 		conversation.setParticipants(participants);
-		GroupInfo groupInfo = GroupInfo.builder().conversation(conversation).avatarUrl(name).name(name).creator(user)
+		// No avatarUrl until a group picture is uploaded -- it used to be set to the
+		// group name, so any client rendering it as an <img src> fetched garbage.
+		// Clients fall back to a composite of the members' avatars.
+		GroupInfo groupInfo = GroupInfo.builder().conversation(conversation).name(name).creator(user)
 				.build();
 		conversation.setGroup(groupInfo);
 
