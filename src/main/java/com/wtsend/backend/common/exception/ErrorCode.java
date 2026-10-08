@@ -81,7 +81,7 @@ public enum ErrorCode {
 	// --- 7000-7099 media --------------------------------------------------
 	FILE_REQUIRED(7000, HttpStatus.BAD_REQUEST, "No file uploaded"),
 	FILE_UPLOAD_FAILED(7001, HttpStatus.BAD_GATEWAY, "Could not upload the file"),
-	FILE_TOO_LARGE(7002, HttpStatus.PAYLOAD_TOO_LARGE, "Uploaded file is too large");
+	FILE_TOO_LARGE(7002, HttpStatus.CONTENT_TOO_LARGE, "Uploaded file is too large");
 
 	private final int code;
 	private final HttpStatus status;
