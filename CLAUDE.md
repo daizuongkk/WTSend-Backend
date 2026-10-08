@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-WTSend backend — a real-time chat/messaging API. Spring Boot 4.0.x, Java 21, Maven. Base package `com.wtsend.backend`.
+WTSend backend — a real-time chat/messaging API. Spring Boot 4.1.x, Java 21, Maven. Base package `com.wtsend.backend`.
 
 ## Commands
 
@@ -16,13 +16,13 @@ docker compose up -d                                    # start Redis (localhost
 ./mvnw test -Dtest=BackendApplicationTests#methodName   # single test
 ```
 
-There is no real test suite — only `BackendApplicationTests#contextLoads`, which boots the whole app and so needs MySQL + Redis reachable. `./mvnw clean package -DskipTests` if they aren't.
+`MessageServiceTest`, `UserServiceTest` and `ErrorCodeTest` are plain Mockito/JUnit tests and run with no infrastructure. `BackendApplicationTests#contextLoads` boots the whole app, so it needs MySQL + Redis reachable — use `./mvnw clean package -DskipTests` when they aren't.
 
 MySQL must exist separately (DB `wtsend`); Hibernate `ddl-auto=update` creates/updates tables. Active profile is `local` (`application-local.properties`), which points the datasource at a Docker MySQL IP — override `spring.datasource.url` for your local DB.
 
 ## Architecture
 
-Standard layered Spring MVC: `controllers/` → `services/` (impls + `services/interfaces/I*`) → `repository/` (Spring Data JPA) → `model/` (JPA entities). Requests/responses are DTOs in `dto/request` and `dto/response`; entity↔DTO conversion uses ModelMapper (`configs/ModelMapperConfig`) plus hand-written mappers in `libs/`. Controllers wrap responses in `dto/response/ApiResponse`; errors go through `exceptions/GlobalExceptionHandler`.
+Standard layered Spring MVC: `controllers/` → `services/` (impls + `services/interfaces/I*`) → `repository/` (Spring Data JPA) → `model/` (JPA entities). Requests/responses are DTOs in `dto/request` and `dto/response`; entity↔DTO conversion uses ModelMapper (`configs/ModelMapperConfig`) plus hand-written mappers in `libs/`. Controllers return bare DTOs or `ResponseEntity<Object>` — `dto/response/ApiResponse` exists but **nothing references it**. Errors go through `common/exception/GlobalExceptionHandler`, which renders an `ErrorResponse` from an `ErrorCode`; those numeric codes are a stable contract with the frontend, so never reuse or renumber one.
 
 Two things here are non-obvious and cut across many files:
 
@@ -40,7 +40,7 @@ Two things here are non-obvious and cut across many files:
 - Socket auth: client passes the JWT as a `?token=` handshake query param; `SocketIOService.onConnect` decodes it with the same `JwtDecoder`. Rooms are named by **conversation id**; on connect a user is auto-joined to all their conversation rooms plus a room keyed by their own user id. Online presence is tracked in-memory in `OnlineUserStore`.
 - **Messages are pushed after the DB commit, not inline.** Saving a message publishes a `NewMessageEvent`; `listener/MessageNotificationListener` handles it with `@TransactionalEventListener(AFTER_COMMIT)` and broadcasts `new-message` to the conversation room. Preserve this event→listener→broadcast flow — don't call the socket server directly from a service inside the transaction.
 
-> Branch `impl-stomp` is named for a planned migration to STOMP, but **no STOMP/Spring-WebSocket code exists yet** — there is no `spring-boot-starter-websocket` dependency and no broker config. netty-socketio is the only live mechanism. Re-check before assuming otherwise.
+> Branch `impl-stomp` is named for a migration to STOMP that was **abandoned and removed**. A `configs/WebSocketConfiguration` + `configs/WebSocketHandshake` pair briefly existed (broker on `/ws`, plus a handshake interceptor that authenticated nobody) with zero `@MessageMapping` handlers; both files and the `spring-boot-starter-websocket` dependency are gone. netty-socketio is the only real-time mechanism — don't reintroduce STOMP alongside it.
 
 ## Config & secrets
 
