@@ -124,12 +124,12 @@ class MessageServiceTest {
 	void getMessagesRejectsANonParticipant() {
 		when(participantRepo.findByConversationIdAndUserId(CONVO_ID, MALLORY)).thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> messageService.getMessages(CONVO_ID, MALLORY, 50, null))
+		assertThatThrownBy(() -> messageService.getMessages(CONVO_ID, MALLORY, 50, (String) null))
 				.isInstanceOf(AppException.class)
 				.extracting(ex -> ((AppException) ex).getErrorCode())
 				.isEqualTo(ErrorCode.CONVERSATION_ACCESS_DENIED);
 
-		verify(messageRepo, never()).findByConversation_IdOrderByCreatedAtDesc(anyLong(), any());
+		verify(messageRepo, never()).findNewestPage(anyLong(), any());
 	}
 
 	@Test
@@ -166,49 +166,6 @@ class MessageServiceTest {
 		messageService.sendDirectMessage(request, ALICE);
 
 		verify(messageRepo).save(any(Message.class));
-	}
-
-	@Test
-	void cursorPaginationReturnsEveryMessageAcrossPages() {
-		// 7 messages, 3 per page. The old cursor logic took the probe row as the
-		// cursor and then queried strictly before it, dropping one per page.
-		List<Message> all = new ArrayList<>();
-		for (int i = 0; i < 7; i++) {
-			Message m = new Message();
-			m.setId((long) i);
-			m.setContent("m" + i);
-			m.setCreatedAt(Instant.ofEpochSecond(1000 + i));
-			all.add(m);
-		}
-		List<Message> newestFirst = new ArrayList<>(all);
-		newestFirst.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
-
-		when(participantRepo.findByConversationIdAndUserId(eq(CONVO_ID), eq(ALICE)))
-				.thenReturn(Optional.of(new Participant()));
-		when(messageMapper.toResponse(any(Message.class))).thenAnswer(inv -> {
-			MessageResponse r = new MessageResponse();
-			r.setId(((Message) inv.getArgument(0)).getId());
-			return r;
-		});
-
-		when(messageRepo.findByConversation_IdOrderByCreatedAtDesc(eq(CONVO_ID), any(Pageable.class)))
-				.thenAnswer(inv -> page(newestFirst, null, inv.getArgument(1, Pageable.class).getPageSize()));
-		when(messageRepo.findAllByConversation_IdAndCreatedAtBeforeOrderByCreatedAtDesc(eq(CONVO_ID),
-				any(Instant.class), any(Pageable.class)))
-				.thenAnswer(inv -> page(newestFirst, inv.getArgument(1, Instant.class),
-						inv.getArgument(2, Pageable.class).getPageSize()));
-
-		List<Long> seen = new ArrayList<>();
-		Instant cursor = null;
-		for (int guard = 0; guard < 10; guard++) {
-			MessagesResponse res = messageService.getMessages(CONVO_ID, ALICE, 3, cursor);
-			res.getMessages().forEach(m -> seen.add(m.getId()));
-			cursor = res.getNextCursor();
-			if (cursor == null)
-				break;
-		}
-
-		assertThat(seen).containsExactlyInAnyOrder(0L, 1L, 2L, 3L, 4L, 5L, 6L);
 	}
 
 	@Test
@@ -288,10 +245,109 @@ class MessageServiceTest {
 		assertThat(saved.getValue().getImgUrl()).isEqualTo("https://res.cloudinary.com/x.png");
 	}
 
-	/** Mimics the repository: newest-first, strictly before the cursor, limited. */
-	private static List<Message> page(List<Message> newestFirst, Instant before, int size) {
-		return new ArrayList<>(newestFirst.stream()
-				.filter(m -> before == null || m.getCreatedAt().isBefore(before))
+	@Test
+	void cursorPaginationReturnsEveryMessageAcrossPages() {
+		// 7 messages, 3 per page. An earlier cursor bug took the probe row as the
+		// cursor and then queried strictly before it, dropping one per page.
+		List<Message> history = history(7, i -> Instant.ofEpochSecond(1000 + i));
+
+		stubCursorQueries(history);
+
+		assertThat(walkEveryPage(3)).containsExactlyInAnyOrder(0L, 1L, 2L, 3L, 4L, 5L, 6L);
+	}
+
+	@Test
+	void cursorPaginationHandlesMessagesSharingATimestamp() {
+		// Six messages at only two distinct timestamps, so a page boundary is
+		// guaranteed to land on a tie. Ordering by createdAt alone is not a total
+		// order: "createdAt < cursor" skipped every message tied with the boundary
+		// row, and the client silently lost them.
+		List<Message> history = history(6, i -> Instant.ofEpochSecond(1000 + i / 3));
+
+		stubCursorQueries(history);
+
+		List<Long> seen = walkEveryPage(2);
+		assertThat(seen).containsExactlyInAnyOrder(0L, 1L, 2L, 3L, 4L, 5L);
+		assertThat(seen).doesNotHaveDuplicates();
+	}
+
+	@Test
+	void anEmptyCursorIsTreatedAsTheFirstPage() {
+		// The client sends cursor= for the first page. The parameter used to be
+		// bound as an Instant, so an empty value failed conversion before the
+		// controller method ran and the first page always came back 400.
+		stubCursorQueries(history(2, i -> Instant.ofEpochSecond(1000 + i)));
+
+		MessagesResponse res = messageService.getMessages(CONVO_ID, ALICE, 10, "");
+
+		assertThat(res.getMessages()).hasSize(2);
+		assertThat(res.getNextCursor()).isNull();
+	}
+
+	@Test
+	void aMalformedCursorIsRejected() {
+		when(participantRepo.findByConversationIdAndUserId(CONVO_ID, ALICE))
+				.thenReturn(Optional.of(new Participant()));
+
+		assertThatThrownBy(() -> messageService.getMessages(CONVO_ID, ALICE, 10, "not-a-cursor"))
+				.isInstanceOf(AppException.class)
+				.extracting(ex -> ((AppException) ex).getErrorCode())
+				.isEqualTo(ErrorCode.MALFORMED_REQUEST);
+	}
+
+	/** Messages 0..n-1, each timestamped by the supplied function. */
+	private static List<Message> history(int count, java.util.function.IntFunction<Instant> timestampOf) {
+		List<Message> messages = new ArrayList<>();
+		for (int i = 0; i < count; i++) {
+			Message m = new Message();
+			m.setId((long) i);
+			m.setContent("m" + i);
+			m.setCreatedAt(timestampOf.apply(i));
+			messages.add(m);
+		}
+		return messages;
+	}
+
+	private void stubCursorQueries(List<Message> history) {
+		// Newest first, ties broken by descending id -- the repository's ORDER BY.
+		List<Message> ordered = new ArrayList<>(history);
+		ordered.sort(java.util.Comparator.comparing(Message::getCreatedAt)
+				.thenComparing(Message::getId).reversed());
+
+		when(participantRepo.findByConversationIdAndUserId(eq(CONVO_ID), eq(ALICE)))
+				.thenReturn(Optional.of(new Participant()));
+		when(messageMapper.toResponse(any(Message.class))).thenAnswer(inv -> {
+			MessageResponse r = new MessageResponse();
+			r.setId(((Message) inv.getArgument(0)).getId());
+			return r;
+		});
+		when(messageRepo.findNewestPage(eq(CONVO_ID), any(Pageable.class)))
+				.thenAnswer(inv -> page(ordered, null, null, inv.getArgument(1, Pageable.class).getPageSize()));
+		when(messageRepo.findPageOlderThan(eq(CONVO_ID), any(Instant.class), anyLong(), any(Pageable.class)))
+				.thenAnswer(inv -> page(ordered, inv.getArgument(1, Instant.class), inv.getArgument(2, Long.class),
+						inv.getArgument(3, Pageable.class).getPageSize()));
+	}
+
+	/** Pages through the whole conversation and collects every id returned. */
+	private List<Long> walkEveryPage(int pageSize) {
+		List<Long> seen = new ArrayList<>();
+		String cursor = null;
+		for (int guard = 0; guard < 20; guard++) {
+			MessagesResponse res = messageService.getMessages(CONVO_ID, ALICE, pageSize, cursor);
+			res.getMessages().forEach(m -> seen.add(m.getId()));
+			cursor = res.getNextCursor();
+			if (cursor == null)
+				break;
+		}
+		return seen;
+	}
+
+	/** Mimics the repository: the (createdAt, id) keyset comparison, limited. */
+	private static List<Message> page(List<Message> ordered, Instant beforeTimestamp, Long beforeId, int size) {
+		return new ArrayList<>(ordered.stream()
+				.filter(m -> beforeTimestamp == null
+						|| m.getCreatedAt().isBefore(beforeTimestamp)
+						|| (m.getCreatedAt().equals(beforeTimestamp) && m.getId() < beforeId))
 				.limit(size)
 				.toList());
 	}

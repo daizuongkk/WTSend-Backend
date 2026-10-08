@@ -1,6 +1,5 @@
 package com.wtsend.backend.dto.response;
 
-import java.time.Instant;
 import java.util.List;
 
 import lombok.Builder;
@@ -12,5 +11,7 @@ import lombok.Setter;
 @Builder
 public class MessagesResponse {
 	private List<MessageResponse> messages;
-	private Instant nextCursor;
+	// Opaque keyset cursor -- clients echo it back untouched.
+	// See com.wtsend.backend.libs.MessageCursor.
+	private String nextCursor;
 }

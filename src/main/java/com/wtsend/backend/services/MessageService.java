@@ -22,6 +22,7 @@ import com.wtsend.backend.event.NewMessageEvent;
 import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.ConversationMapper;
+import com.wtsend.backend.libs.MessageCursor;
 import com.wtsend.backend.libs.MessageMapper;
 import com.wtsend.backend.libs.utils.MessageHelper;
 import com.wtsend.backend.model.Conversation;
@@ -167,26 +168,27 @@ public class MessageService implements IMessageService {
 	}
 
 	@Override
-	public MessagesResponse getMessages(Long conversationId, String userId, int limit, Instant cursor) {
+	public MessagesResponse getMessages(Long conversationId, String userId, int limit, String cursor) {
 
 		if (participantRepo.findByConversationIdAndUserId(conversationId, userId).isEmpty())
 			throw new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED)
 					.withDetail("conversationId=" + conversationId + " userId=" + userId);
 
+		MessageCursor position = MessageCursor.parse(cursor);
 		Pageable pageable = PageRequest.of(0, limit + 1);
-		List<Message> messages = cursor != null
-				? messageRepo.findAllByConversation_IdAndCreatedAtBeforeOrderByCreatedAtDesc(conversationId, cursor,
-						pageable)
-				: messageRepo.findByConversation_IdOrderByCreatedAtDesc(conversationId, pageable);
+		List<Message> messages = position != null
+				? messageRepo.findPageOlderThan(conversationId, position.createdAt(), position.id(), pageable)
+				: messageRepo.findNewestPage(conversationId, pageable);
 
-		Instant nextCursor = null;
+		String nextCursor = null;
 
 		if (messages.size() > limit) {
 			// Drop the probe row, then take the cursor from the last row we KEPT --
 			// the next page queries strictly before the cursor, so using the probe
 			// row would skip it permanently.
 			messages = new ArrayList<>(messages.subList(0, limit));
-			nextCursor = messages.get(limit - 1).getCreatedAt();
+			Message oldestKept = messages.get(limit - 1);
+			nextCursor = new MessageCursor(oldestKept.getCreatedAt(), oldestKept.getId()).encode();
 		}
 
 		List<MessageResponse> messageResponses = messages.reversed().stream()
