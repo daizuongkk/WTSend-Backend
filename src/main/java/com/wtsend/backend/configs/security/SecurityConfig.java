@@ -20,9 +20,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.wtsend.backend.common.exception.SecurityErrorResponder;
 import com.wtsend.backend.services.CustomUserDetailsService;
 
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
 @Configuration
@@ -32,6 +32,8 @@ public class SecurityConfig {
 	private final JwtAuthenticationConverter jwtAuthenticationConverter;
 
 	private final CustomUserDetailsService userDetailsService;
+
+	private final SecurityErrorResponder securityErrorResponder;
 
 	private static final String[] WHITE_LIST = {
 			"/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/login/**", "/oauth2/**", "/error",
@@ -58,9 +60,13 @@ public class SecurityConfig {
 						.anyRequest().authenticated())
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
 				.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
+				// Security rejects requests inside the filter chain, before any
+				// @RestControllerAdvice runs. Without both halves wired, a 401 fell back
+				// to sendError and every 403 -- including a failed EMAIL_VERIFIED check --
+				// returned the container error page instead of an ErrorResponse.
 				.exceptionHandling(exception -> exception
-						.authenticationEntryPoint((request, response, authException) -> response
-								.sendError(HttpServletResponse.SC_UNAUTHORIZED, authException.getMessage())));
+						.authenticationEntryPoint(securityErrorResponder)
+						.accessDeniedHandler(securityErrorResponder));
 		return http.build();
 	}
 
