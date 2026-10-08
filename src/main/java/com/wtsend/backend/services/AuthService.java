@@ -1,6 +1,7 @@
 package com.wtsend.backend.services;
 
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -14,6 +15,7 @@ import com.wtsend.backend.dto.request.SignInRequest;
 import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.response.AuthResponse;
 import com.wtsend.backend.dto.response.UserResponse;
+import com.wtsend.backend.event.VerificationEmailRequestedEvent;
 import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.utils.UserUtils;
@@ -38,7 +40,7 @@ public class AuthService implements IAuthService {
 	private final UserUtils userMapper;
 	private final PasswordEncoder passwordEncoder;
 	private final GoogleAuthService googleAuthService;
-	private final EmailService emailService;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public AuthResponse signIn(SignInRequest req) {
 		UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
@@ -50,7 +52,9 @@ public class AuthService implements IAuthService {
 
 		if (!user.isEmailVerified()) {
 
-			emailService.sendVerifyLink(user);
+			// After commit, off the transaction. Also means a cooldown rejection no
+			// longer fails the login itself.
+			eventPublisher.publishEvent(new VerificationEmailRequestedEvent(user.getId()));
 			return AuthResponse.builder().emailVerified(false).accessToken(jwtService.generateToken(user))
 					.email(user.getEmail()).build();
 		}
@@ -94,10 +98,13 @@ public class AuthService implements IAuthService {
 
 		User newUser = userMapper.toUser(request);
 
-		// Save first: the id is generated on persist, and sendVerifyLink stores a
-		// token keyed by it.
 		User savedUser = userRepository.save(newUser);
-		emailService.sendVerifyLink(savedUser);
+
+		// Published, not sent: the listener runs after this transaction commits, so
+		// the connection is released before the blocking call to Resend. A send
+		// failure no longer rolls the new account back -- an unverified account is
+		// deleted after 24 hours instead.
+		eventPublisher.publishEvent(new VerificationEmailRequestedEvent(savedUser.getId()));
 
 		return userMapper.toUserResponse(savedUser);
 

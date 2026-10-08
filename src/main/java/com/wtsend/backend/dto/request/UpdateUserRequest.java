@@ -2,7 +2,6 @@ package com.wtsend.backend.dto.request;
 
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -25,6 +24,13 @@ import lombok.Setter;
  * at all. Both columns are NOT NULL and neither field is meant to be clearable,
  * so {@link #NOT_BLANK} rejects a present-but-blank value while still skipping
  * {@code null} the way every constraint does.
+ *
+ * <p>
+ * There is deliberately no email field. Changing an address dropped the account
+ * back to unverified, which made "unverified" mean two different things and put
+ * long-standing accounts in scope for the 24-hour cleanup of abandoned
+ * registrations. It also let anyone move their account onto somebody else's
+ * address, which is exactly what that cleanup exists to prevent.
  */
 @Getter
 @Setter
@@ -35,10 +41,6 @@ public class UpdateUserRequest {
 
 	@Size(min = 8, max = 20, message = "Username must be from 8 to 20 characters.")
 	private String username;
-
-	@Email(message = "Invalid email format")
-	@Pattern(regexp = NOT_BLANK, message = "Email cannot be blank")
-	private String email;
 
 	private MultipartFile avatar;
 

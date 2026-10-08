@@ -103,13 +103,9 @@ public class UserService implements IUserService {
 			existUser.setUsername(request.getUsername());
 		}
 
-		if (request.getEmail() != null && !request.getEmail().equals(existUser.getEmail())) {
-			if (userRepository.existsByEmail(request.getEmail()))
-				throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
-			existUser.setEmail(request.getEmail());
-			// The new address is unproven, so the account drops back to unverified.
-			existUser.setEmailVerified(false);
-		}
+		// Email is intentionally not updatable. It used to reset emailVerified,
+		// which gave "unverified" two meanings and would have put established
+		// accounts in scope for the 24-hour deletion of abandoned registrations.
 
 		if (request.getDisplayName() != null)
 			existUser.setDisplayName(request.getDisplayName());

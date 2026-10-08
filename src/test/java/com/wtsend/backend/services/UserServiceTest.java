@@ -71,21 +71,27 @@ class UserServiceTest {
 	}
 
 	@Test
-	void changingEmailResetsVerification() {
+	void updateUserLeavesTheEmailAndItsVerificationAlone() {
+		// The email used to be updatable, and changing it reset emailVerified. That
+		// gave "unverified" two meanings -- never verified, versus verified once and
+		// now changing address -- and the 24-hour cleanup of abandoned registrations
+		// cannot tell them apart, so an established account would have been deleted.
+		// It also let anyone move their account onto someone else's address.
 		User caller = new User();
 		caller.setId(CALLER);
-		caller.setEmail("old@example.com");
+		caller.setEmail("owner@example.com");
 		ReflectionTestUtils.setField(caller, "emailVerified", true);
 
 		when(userRepository.findById(CALLER)).thenReturn(Optional.of(caller));
-		when(userRepository.existsByEmail("new@example.com")).thenReturn(false);
 		when(userMapper.toUserResponse(any(User.class))).thenReturn(new UserResponse());
 
 		UpdateUserRequest request = new UpdateUserRequest();
-		request.setEmail("new@example.com");
+		request.setDisplayName("renamed");
 
 		userService.updateUser(request, CALLER);
 
-		assertThat(caller.isEmailVerified()).isFalse();
+		assertThat(caller.getEmail()).isEqualTo("owner@example.com");
+		assertThat(caller.isEmailVerified()).isTrue();
+		verify(userRepository, never()).existsByEmail(any());
 	}
 }

@@ -2,6 +2,8 @@ package com.wtsend.backend.dto.request;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -66,16 +68,14 @@ class UpdateUserRequestTest {
 	}
 
 	@Test
-	void aBlankEmailIsRejected() {
-		// @Email alone accepts "" per the Jakarta spec, so it needs the extra guard.
-		assertThat(validate(request -> request.setEmail("")))
-				.extracting(violation -> violation.getPropertyPath().toString())
-				.containsExactly("email");
-	}
-
-	@Test
-	void aMalformedEmailIsStillRejected() {
-		assertThat(validate(request -> request.setEmail("not-an-email"))).isNotEmpty();
+	void thereIsNoEmailFieldToUpdate() {
+		// Changing an address reset emailVerified, which gave "unverified" two
+		// meanings and would have put established accounts in scope for the
+		// 24-hour deletion of abandoned registrations. It also let anyone move
+		// their account onto an address they do not own.
+		assertThat(Arrays.stream(UpdateUserRequest.class.getDeclaredFields())
+				.map(Field::getName))
+				.doesNotContain("email");
 	}
 
 	@ParameterizedTest
