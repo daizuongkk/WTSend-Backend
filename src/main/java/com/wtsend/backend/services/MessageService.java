@@ -65,7 +65,7 @@ public class MessageService implements IMessageService {
 			// Retry advice sits outside the transaction advice, so each attempt
 			// gets a fresh transaction rather than reusing a rollback-only one.
 			DataIntegrityViolationException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
-	public void sendDirectMessage(SendDirectMessageRequest request, String senderId) {
+	public MessageResponse sendDirectMessage(SendDirectMessageRequest request, String senderId) {
 
 		String recipientId = request.getRecipientId();
 
@@ -111,7 +111,7 @@ public class MessageService implements IMessageService {
 				.content(request.getContent()).imgUrl(request.getImgUrl()).build();
 		messageRepo.save(message);
 
-		publishNewMessage(conversation, message, senderId);
+		return publishNewMessage(conversation, message, senderId);
 	}
 
 	private Conversation createNewDirectConversation(User sender, User recipient) {
@@ -138,7 +138,7 @@ public class MessageService implements IMessageService {
 	@Override
 	@Retryable(retryFor = { CannotAcquireLockException.class,
 			DeadlockLoserDataAccessException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
-	public void sendGroupMessage(SendGroupMessageRequest request, String senderId) {
+	public MessageResponse sendGroupMessage(SendGroupMessageRequest request, String senderId) {
 		Long conversationId = request.getConversationId();
 
 		Conversation conversation = conversationRepo.findById(conversationId)
@@ -156,7 +156,7 @@ public class MessageService implements IMessageService {
 				.imgUrl(request.getImgUrl()).build();
 		messageRepo.save(message);
 
-		publishNewMessage(conversation, message, senderId);
+		return publishNewMessage(conversation, message, senderId);
 	}
 
 	/**
@@ -164,7 +164,7 @@ public class MessageService implements IMessageService {
 	 * updates as atomic SQL and hands the DTOs to the AFTER_COMMIT listener. The
 	 * bulk updates clear the persistence context, so mapping has to happen first.
 	 */
-	private void publishNewMessage(Conversation conversation, Message message, String senderId) {
+	private MessageResponse publishNewMessage(Conversation conversation, Message message, String senderId) {
 		ConversationResponse conversationDto = conversationMapper.toResponse(conversation);
 		conversationDto.setLastMessage(messageMapper.toLastMessage(message));
 		conversationDto.setLastMessageAt(message.getCreatedAt());
@@ -176,6 +176,10 @@ public class MessageService implements IMessageService {
 		participantRepo.resetUnreadCountForSender(conversationId, senderId);
 
 		applicationEventPublisher.publishEvent(new NewMessageEvent(conversationDto, messageDto));
+
+		// Returned to the sender so the client can swap its optimistic bubble for the
+		// real row. Without an id it had to guess which echo belonged to which send.
+		return messageDto;
 	}
 
 	@Override

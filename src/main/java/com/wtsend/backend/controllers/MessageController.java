@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.wtsend.backend.dto.request.SendDirectMessageRequest;
 import com.wtsend.backend.dto.request.SendGroupMessageRequest;
+import com.wtsend.backend.dto.response.MessageResponse;
 import com.wtsend.backend.dto.response.MessagesResponse;
 import com.wtsend.backend.services.interfaces.IMessageService;
 
@@ -33,18 +34,20 @@ public class MessageController {
 	}
 
 	@PostMapping("/direct")
-	public ResponseEntity<String> sendDirectMessage(@RequestBody @Valid SendDirectMessageRequest request,
+	/**
+	 * Returns the stored message rather than a string. The client shows a message
+	 * optimistically and needs the real id to reconcile it; the socket echo alone
+	 * meant guessing which echo matched which send.
+	 */
+	public ResponseEntity<MessageResponse> sendDirectMessage(@RequestBody @Valid SendDirectMessageRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
-		messageService.sendDirectMessage(request, jwt.getSubject());
-		return ResponseEntity.ok("Send direct message successfully");
+		return ResponseEntity.ok(messageService.sendDirectMessage(request, jwt.getSubject()));
 	}
 
 	@PostMapping("/group")
-	public ResponseEntity<String> sendGroupMessage(@RequestBody @Valid SendGroupMessageRequest request,
+	public ResponseEntity<MessageResponse> sendGroupMessage(@RequestBody @Valid SendGroupMessageRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
-
-		messageService.sendGroupMessage(request, jwt.getSubject());
-		return ResponseEntity.ok("Send group message successfully");
+		return ResponseEntity.ok(messageService.sendGroupMessage(request, jwt.getSubject()));
 	}
 
 	@GetMapping("/{conversationId}")
