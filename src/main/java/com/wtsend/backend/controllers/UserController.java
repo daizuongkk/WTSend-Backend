@@ -48,6 +48,11 @@ public class UserController {
 		return ResponseEntity.ok(userService.findByUsername(username));
 	}
 
+	/**
+	 * Uploads an avatar on its own. The web client does not use this -- it sends
+	 * the file inside {@code PUT /api/users} -- but a non-web client does, so it
+	 * is not dead code despite having no caller in this repository.
+	 */
 	@PostMapping("/upload")
 	public ResponseEntity<Map<String, String>> uploadAvatar(@RequestParam(name = "img") MultipartFile file,
 			@AuthenticationPrincipal Jwt jwt) {

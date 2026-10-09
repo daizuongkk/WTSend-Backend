@@ -53,10 +53,9 @@ public class SecurityConfig {
 				.authorizeHttpRequests(authorize -> authorize
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.requestMatchers(WHITE_LIST).permitAll()
-						.requestMatchers(
-								"/api/resend-otp",
-								"/api/users/me")
-						.authenticated()
+						// Readable by an account that has not verified yet: the client needs
+						// to know whether it has.
+						.requestMatchers("/api/users/me").authenticated()
 						.requestMatchers("/api/send-verify-email").hasAuthority("EMAIL_NOT_VERIFIED")
 						.requestMatchers("/api/**").hasAuthority("EMAIL_VERIFIED")
 						.anyRequest().authenticated())
