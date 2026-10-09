@@ -111,6 +111,33 @@ class RedisPresenceStoreTest {
 	}
 
 	@Test
+	void aUserComingBackAfterACrashIsStillReportedAsArriving() {
+		// What an instance killed with -9 leaves behind: a socket member nobody
+		// will ever remove, under a dead instance's id, alive until the set's own
+		// TTL. The user then reconnects somewhere else.
+		redis.opsForSet().add("presence:sockets:" + userId, "dead-instance:" + UUID.randomUUID());
+
+		// The arrival has to be announced anyway. Deciding it from the socket
+		// count made the ghost look like an existing tab, so nobody was told the
+		// user was back and every open page kept showing them offline.
+		assertThat(presence.add(userId, UUID.randomUUID(), true)).isTrue();
+		assertThat(presence.onlineUserIds()).contains(userId);
+	}
+
+	@Test
+	void pruningReportsWhoItRemovedSoTheyCanBeAnnouncedOffline() {
+		presence.add(userId, UUID.randomUUID(), true);
+		redis.opsForZSet().add("presence:online", userId,
+				System.currentTimeMillis() / 1000 - RedisPresenceStore.ONLINE_TTL.toSeconds() - 1);
+
+		// Dropping them from the list is not enough: a page that is already open
+		// never re-reads it, so unless the prune says who it removed there is
+		// nobody to send presence-changed(false) about.
+		assertThat(presence.pruneStale()).contains(userId);
+		assertThat(presence.onlineUserIds()).doesNotContain(userId);
+	}
+
+	@Test
 	void aHeartbeatThatStopsTakesTheUserOutOfTheOnlineList() {
 		presence.add(userId, UUID.randomUUID(), true);
 

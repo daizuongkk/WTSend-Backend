@@ -31,6 +31,7 @@ public class PresenceHeartbeat {
 
 	private final SocketIOServer server;
 	private final RedisPresenceStore presence;
+	private final SocketRelay relay;
 
 	@Scheduled(fixedDelay = INTERVAL_MS, initialDelay = INTERVAL_MS)
 	public void beat() {
@@ -42,7 +43,15 @@ public class PresenceHeartbeat {
 					// hidden themselves is not quietly put back in the list here.
 					presence.touch(user.getId());
 			}
-			presence.pruneStale();
+			// Whoever fell out of the list has to be announced. This is the only
+			// moment anyone learns that an instance died without running its
+			// disconnect handlers -- a page already open never re-reads the
+			// list, so without this it shows a vanished user as online until it
+			// is reloaded.
+			for (String userId : presence.pruneStale()) {
+				log.info("Presence expired for {}, announcing offline", userId);
+				relay.toAll("presence-changed", new PresenceChange(userId, false));
+			}
 		} catch (Exception e) {
 			// A scheduled method that throws is not rescheduled on some
 			// configurations, which would freeze presence for this instance.

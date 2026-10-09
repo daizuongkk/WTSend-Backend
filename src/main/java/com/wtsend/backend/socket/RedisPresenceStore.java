@@ -63,22 +63,50 @@ public class RedisPresenceStore {
 	private static final String SOCKETS_KEY_PREFIX = "presence:sockets:";
 
 	/**
-	 * KEYS: sockets, online. ARGV: member, now, socketsTtl, userId, visible.
-	 * Returns the socket count.
+	 * KEYS: sockets, online. ARGV: member, now, socketsTtl, userId, visible,
+	 * staleBefore. Returns 1 if this socket brought the user online.
 	 *
 	 * <p>
 	 * The socket is recorded either way; only the entry other people read is
 	 * conditional. A hidden user still needs their sockets counted, or closing
 	 * one of their two tabs would look like their last one.
+	 *
+	 * <p>
+	 * Arrival is decided by whether the user had a <em>fresh</em> entry in the
+	 * online list -- the same thing readers look at -- and deliberately not by
+	 * the socket count. An instance killed with -9 leaves socket members nobody
+	 * will ever remove, and counting those made a returning user look like
+	 * someone opening a second tab: no arrival was announced, and every page
+	 * already open went on showing them offline until it was reloaded.
 	 */
 	private static final RedisScript<Long> ADD = new DefaultRedisScript<>("""
+			local score = redis.call('ZSCORE', KEYS[2], ARGV[4])
+			local wasOnline = score and tonumber(score) >= tonumber(ARGV[6])
 			redis.call('SADD', KEYS[1], ARGV[1])
 			redis.call('EXPIRE', KEYS[1], ARGV[3])
 			if ARGV[5] == '1' then
 			  redis.call('ZADD', KEYS[2], ARGV[2], ARGV[4])
 			end
-			return redis.call('SCARD', KEYS[1])
+			if wasOnline then
+			  return 0
+			end
+			return 1
 			""", Long.class);
+
+	/**
+	 * KEYS: online. ARGV: staleBefore. Returns the user ids it removed.
+	 *
+	 * <p>
+	 * Reading and removing in one script matters with more than one instance:
+	 * they all run this, and only the one whose call actually removed the
+	 * entries gets them back to announce, so a departure is announced once.
+	 */
+	@SuppressWarnings("rawtypes")
+	private static final RedisScript<List> PRUNE = new DefaultRedisScript<>("""
+			local stale = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+			redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+			return stale
+			""", List.class);
 
 	/** KEYS: sockets, online. ARGV: member, userId. Returns 1 if that was the last socket. */
 	private static final RedisScript<Long> REMOVE = new DefaultRedisScript<>("""
@@ -121,12 +149,16 @@ public class RedisPresenceStore {
 	/**
 	 * @param visible whether other people may see this user, i.e.
 	 *                {@code User.showOnlineStatus}
-	 * @return true if this socket brought the user online anywhere in the cluster
+	 * @return true if this socket brought the user online anywhere in the
+	 *         cluster. Only meaningful for a visible user -- a hidden one is
+	 *         never in the list, so every socket of theirs looks like an
+	 *         arrival, and the caller does not announce it either way.
 	 */
 	public boolean add(String userId, UUID socketId, boolean visible) {
-		Long sockets = redis.execute(ADD, keys(userId),
-				member(socketId), now(), ttlSeconds(SOCKETS_TTL), userId, visible ? "1" : "0");
-		return sockets != null && sockets == 1L;
+		Long cameOnline = redis.execute(ADD, keys(userId),
+				member(socketId), now(), ttlSeconds(SOCKETS_TTL), userId,
+				visible ? "1" : "0", staleBefore());
+		return cameOnline != null && cameOnline == 1L;
 	}
 
 	/**
@@ -167,13 +199,23 @@ public class RedisPresenceStore {
 	}
 
 	/**
-	 * Drops heartbeats nobody has refreshed. Only hygiene: a read already
-	 * filters by score, so this just keeps the ZSET from growing by one entry
-	 * per user who was ever online.
+	 * Drops the heartbeats nobody has refreshed and says whose they were.
+	 *
+	 * <p>
+	 * The caller has to announce them. It is not hygiene: a page that is
+	 * already open never re-reads the online list, so when an instance dies
+	 * without running its disconnect handlers, removing its users here is the
+	 * only moment anyone could be told they are gone. Silently deleting the
+	 * rows left every open page showing a vanished user as online for as long
+	 * as it stayed open.
+	 *
+	 * @return the user ids removed, which this instance is now responsible for
+	 *         broadcasting as offline
 	 */
-	void pruneStale() {
-		redis.opsForZSet().removeRangeByScore(ONLINE_KEY,
-				Double.NEGATIVE_INFINITY, Instant.now().minus(ONLINE_TTL).getEpochSecond());
+	@SuppressWarnings("unchecked")
+	List<String> pruneStale() {
+		List<String> removed = redis.execute(PRUNE, List.of(ONLINE_KEY), staleBefore());
+		return removed == null ? List.of() : removed;
 	}
 
 	private List<String> keys(String userId) {
@@ -190,6 +232,11 @@ public class RedisPresenceStore {
 
 	private String now() {
 		return String.valueOf(Instant.now().getEpochSecond());
+	}
+
+	/** Heartbeats older than this are not online, whoever wrote them. */
+	private String staleBefore() {
+		return String.valueOf(Instant.now().minus(ONLINE_TTL).getEpochSecond());
 	}
 
 	private String ttlSeconds(Duration duration) {
