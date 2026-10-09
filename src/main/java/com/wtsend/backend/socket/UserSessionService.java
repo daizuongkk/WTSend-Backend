@@ -37,11 +37,16 @@ public class UserSessionService {
 			return;
 		}
 		client.set("user", user);
-		onlineUsers.add(user.getId(), client.getSessionId());
+		boolean cameOnline = onlineUsers.add(user.getId(), client.getSessionId());
 		log.info("{} connected with socket {}", user.getUsername(), client.getSessionId());
-		client.getNamespace()
-				.getBroadcastOperations()
-				.sendEvent("online-users", onlineUsers.getStore().keySet());
+
+		// The snapshot goes to the arriving client alone. It used to be broadcast
+		// to everyone on every connect, so one person opening a tab resent the
+		// whole online list to every socket.
+		client.sendEvent("online-users", onlineUsers.onlineUserIds());
+
+		if (cameOnline)
+			broadcastPresence(client, user.getId(), true);
 	}
 
 	public void onClientDisconnected(SocketIOClient client) {
@@ -49,11 +54,18 @@ public class UserSessionService {
 		if (user == null)
 			return;
 
-		onlineUsers.remove(user.getId(), client.getSessionId());
+		// Only the last socket closing takes the user offline; a second tab must
+		// not look like a disconnect.
+		if (onlineUsers.remove(user.getId(), client.getSessionId()))
+			broadcastPresence(client, user.getId(), false);
+
+		log.info("{} disconnected.", user.getUsername());
+	}
+
+	private void broadcastPresence(SocketIOClient client, String userId, boolean online) {
 		client.getNamespace()
 				.getBroadcastOperations()
-				.sendEvent("online-users", onlineUsers.getStore().keySet());
-		log.info("{} disconnected.", user.getUsername());
+				.sendEvent("presence-changed", new PresenceChange(userId, online));
 	}
 
 	public void subscribeUserToConversations(SocketIOClient client) {
