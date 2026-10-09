@@ -4,11 +4,13 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.wtsend.backend.dto.request.UpdateUserRequest;
+import com.wtsend.backend.event.OnlineVisibilityChangedEvent;
 import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.dto.response.UserSummaryResponse;
 import com.wtsend.backend.common.exception.AppException;
@@ -32,6 +34,8 @@ public class UserService implements IUserService {
 	private final UserUtils userMapper;
 
 	private final CloudinaryService cloudinary;
+
+	private final ApplicationEventPublisher eventPublisher;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -121,10 +125,28 @@ public class UserService implements IUserService {
 					: LocalDate.parse(request.getBirthday(), BIRTHDAY_FORMAT));
 		}
 
+		// Only on an actual change: without the comparison, editing a bio would
+		// rebroadcast the user's presence to everyone.
+		boolean visibilityChanged = request.getShowOnlineStatus() != null
+				&& request.getShowOnlineStatus() != existUser.isShowOnlineStatus();
+		if (visibilityChanged)
+			existUser.setShowOnlineStatus(request.getShowOnlineStatus());
+
 		if (request.getAvatar() != null) {
 			uploadAvatar(request.getAvatar(), existUser.getId());
 		}
 		userRepository.save(existUser);
+
+		// After the save, not before. This method is deliberately not
+		// @Transactional -- uploadAvatar above makes two Cloudinary round trips,
+		// and a transaction here would hold a pooled database connection for the
+		// whole of them. So there is no commit for the listener to hang off, and
+		// it runs with fallbackExecution: publishing after the save is what puts
+		// it on the right side of the write.
+		if (visibilityChanged)
+			eventPublisher.publishEvent(
+					new OnlineVisibilityChangedEvent(existUser.getId(), existUser.isShowOnlineStatus()));
+
 		return userMapper.toUserResponse(existUser);
 	}
 

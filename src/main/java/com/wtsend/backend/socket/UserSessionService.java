@@ -41,7 +41,8 @@ public class UserSessionService {
 			return;
 		}
 		client.set("user", user);
-		boolean cameOnline = onlineUsers.add(user.getId(), client.getSessionId());
+		boolean cameOnline = onlineUsers.add(user.getId(), client.getSessionId(),
+				user.isShowOnlineStatus());
 		log.info("{} connected with socket {}", user.getUsername(), client.getSessionId());
 
 		// The snapshot goes to the arriving client alone. It used to be broadcast
@@ -49,7 +50,9 @@ public class UserSessionService {
 		// whole online list to every socket.
 		client.sendEvent("online-users", onlineUsers.onlineUserIds());
 
-		if (cameOnline)
+		// A user who has turned their status off is not announced, and was never
+		// put in the online list to begin with.
+		if (cameOnline && user.isShowOnlineStatus())
 			broadcastPresence(user.getId(), true);
 	}
 
@@ -60,6 +63,11 @@ public class UserSessionService {
 
 		// Only the last socket closing takes the user offline; a second tab must
 		// not look like a disconnect.
+		// Not gated on showOnlineStatus, deliberately. The UserResponse cached on
+		// this socket is from connect time, so it can be stale if the user has
+		// toggled since -- and telling clients that an already-invisible user is
+		// offline changes nothing for them, while skipping it wrongly would leave
+		// someone shown online after they left.
 		if (onlineUsers.remove(user.getId(), client.getSessionId()))
 			broadcastPresence(user.getId(), false);
 

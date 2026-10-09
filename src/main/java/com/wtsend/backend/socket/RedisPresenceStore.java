@@ -62,11 +62,21 @@ public class RedisPresenceStore {
 	private static final String ONLINE_KEY = "presence:online";
 	private static final String SOCKETS_KEY_PREFIX = "presence:sockets:";
 
-	/** KEYS: sockets, online. ARGV: member, now, socketsTtl, userId. Returns the socket count. */
+	/**
+	 * KEYS: sockets, online. ARGV: member, now, socketsTtl, userId, visible.
+	 * Returns the socket count.
+	 *
+	 * <p>
+	 * The socket is recorded either way; only the entry other people read is
+	 * conditional. A hidden user still needs their sockets counted, or closing
+	 * one of their two tabs would look like their last one.
+	 */
 	private static final RedisScript<Long> ADD = new DefaultRedisScript<>("""
 			redis.call('SADD', KEYS[1], ARGV[1])
 			redis.call('EXPIRE', KEYS[1], ARGV[3])
-			redis.call('ZADD', KEYS[2], ARGV[2], ARGV[4])
+			if ARGV[5] == '1' then
+			  redis.call('ZADD', KEYS[2], ARGV[2], ARGV[4])
+			end
 			return redis.call('SCARD', KEYS[1])
 			""", Long.class);
 
@@ -81,21 +91,62 @@ public class RedisPresenceStore {
 			return 0
 			""", Long.class);
 
-	/** KEYS: sockets, online. ARGV: now, socketsTtl, userId. */
+	/**
+	 * KEYS: sockets, online. ARGV: now, socketsTtl, userId.
+	 *
+	 * <p>
+	 * {@code ZADD ... XX} refreshes an existing entry and never creates one,
+	 * which is what keeps {@link #hide(String)} from being undone by the next
+	 * heartbeat 30 seconds later. A heartbeat's job is liveness, not
+	 * registration.
+	 */
 	private static final RedisScript<Long> TOUCH = new DefaultRedisScript<>("""
 			redis.call('EXPIRE', KEYS[1], ARGV[2])
-			redis.call('ZADD', KEYS[2], ARGV[1], ARGV[3])
+			redis.call('ZADD', KEYS[2], 'XX', ARGV[1], ARGV[3])
+			return 1
+			""", Long.class);
+
+	/** KEYS: sockets, online. ARGV: now, userId. Returns 1 if the user is now listed. */
+	private static final RedisScript<Long> SHOW = new DefaultRedisScript<>("""
+			if redis.call('SCARD', KEYS[1]) == 0 then
+			  return 0
+			end
+			redis.call('ZADD', KEYS[2], ARGV[1], ARGV[2])
 			return 1
 			""", Long.class);
 
 	private final StringRedisTemplate redis;
 	private final InstanceId instanceId;
 
-	/** @return true if this socket brought the user online anywhere in the cluster */
-	public boolean add(String userId, UUID socketId) {
+	/**
+	 * @param visible whether other people may see this user, i.e.
+	 *                {@code User.showOnlineStatus}
+	 * @return true if this socket brought the user online anywhere in the cluster
+	 */
+	public boolean add(String userId, UUID socketId, boolean visible) {
 		Long sockets = redis.execute(ADD, keys(userId),
-				member(socketId), now(), ttlSeconds(SOCKETS_TTL), userId);
+				member(socketId), now(), ttlSeconds(SOCKETS_TTL), userId, visible ? "1" : "0");
 		return sockets != null && sockets == 1L;
+	}
+
+	/**
+	 * Stops other people seeing this user as online, from any instance -- the
+	 * entry is keyed by user, so the instance holding their sockets does not
+	 * have to be the one handling the request.
+	 */
+	public void hide(String userId) {
+		redis.opsForZSet().remove(ONLINE_KEY, userId);
+	}
+
+	/**
+	 * Lets other people see this user again, if they are actually connected
+	 * somewhere.
+	 *
+	 * @return true if the user is now listed, false if they had no live socket
+	 */
+	public boolean show(String userId) {
+		Long listed = redis.execute(SHOW, keys(userId), now(), userId);
+		return listed != null && listed == 1L;
 	}
 
 	/** @return true if this was the user's last socket anywhere in the cluster */

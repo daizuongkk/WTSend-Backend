@@ -103,6 +103,14 @@ public class User implements UserDetails {
 	@Builder.Default
 	boolean phoneVerified = false;
 
+	/**
+	 * Whether other people may see this user as online. Defaults to visible,
+	 * which is the behaviour every existing account already had.
+	 */
+	@Column(name = "show_online_status", nullable = false)
+	@Builder.Default
+	boolean showOnlineStatus = true;
+
 	@Column(name = "avatarUrl")
 	String avatarUrl;
 

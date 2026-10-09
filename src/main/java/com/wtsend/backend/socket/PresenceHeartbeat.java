@@ -38,6 +38,8 @@ public class PresenceHeartbeat {
 			for (SocketIOClient client : server.getAllClients()) {
 				UserResponse user = client.get("user");
 				if (user != null)
+					// touch only refreshes an entry that exists, so a user who has
+					// hidden themselves is not quietly put back in the list here.
 					presence.touch(user.getId());
 			}
 			presence.pruneStale();

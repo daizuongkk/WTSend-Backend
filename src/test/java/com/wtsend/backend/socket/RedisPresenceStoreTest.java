@@ -42,7 +42,7 @@ class RedisPresenceStoreTest {
 	void theFirstSocketBringsTheUserOnlineAndTheLastTakesThemOffline() {
 		UUID socket = UUID.randomUUID();
 
-		assertThat(presence.add(userId, socket)).isTrue();
+		assertThat(presence.add(userId, socket, true)).isTrue();
 		assertThat(presence.onlineUserIds()).contains(userId);
 
 		assertThat(presence.remove(userId, socket)).isTrue();
@@ -54,8 +54,8 @@ class RedisPresenceStoreTest {
 		UUID firstTab = UUID.randomUUID();
 		UUID secondTab = UUID.randomUUID();
 
-		assertThat(presence.add(userId, firstTab)).isTrue();
-		assertThat(presence.add(userId, secondTab)).isFalse();
+		assertThat(presence.add(userId, firstTab, true)).isTrue();
+		assertThat(presence.add(userId, secondTab, true)).isFalse();
 
 		assertThat(presence.remove(userId, secondTab)).isFalse();
 		assertThat(presence.onlineUserIds()).contains(userId);
@@ -72,8 +72,47 @@ class RedisPresenceStoreTest {
 	}
 
 	@Test
+	void aUserWhoHidesTheirStatusIsNeverListed() {
+		assertThat(presence.add(userId, UUID.randomUUID(), false)).isTrue();
+
+		// Their socket is still counted -- closing one of two tabs must not look
+		// like their last one -- they are simply not in the list others read.
+		assertThat(presence.onlineUserIds()).doesNotContain(userId);
+	}
+
+	@Test
+	void hidingTakesEffectAtOnceAndTheHeartbeatDoesNotUndoIt() {
+		presence.add(userId, UUID.randomUUID(), true);
+		assertThat(presence.onlineUserIds()).contains(userId);
+
+		presence.hide(userId);
+		assertThat(presence.onlineUserIds()).doesNotContain(userId);
+
+		// The heartbeat refreshes entries; it must not recreate this one, or
+		// hiding would quietly reverse itself within 30 seconds.
+		presence.touch(userId);
+		assertThat(presence.onlineUserIds()).doesNotContain(userId);
+	}
+
+	@Test
+	void showingAgainListsAConnectedUserAndIgnoresADisconnectedOne() {
+		UUID socket = UUID.randomUUID();
+		presence.add(userId, socket, false);
+
+		assertThat(presence.show(userId)).isTrue();
+		assertThat(presence.onlineUserIds()).contains(userId);
+
+		// Switching the setting on while logged out must not light the user up
+		// for everyone.
+		presence.remove(userId, socket);
+		presence.hide(userId);
+		assertThat(presence.show(userId)).isFalse();
+		assertThat(presence.onlineUserIds()).doesNotContain(userId);
+	}
+
+	@Test
 	void aHeartbeatThatStopsTakesTheUserOutOfTheOnlineList() {
-		presence.add(userId, UUID.randomUUID());
+		presence.add(userId, UUID.randomUUID(), true);
 
 		// What a kill -9 leaves behind: the entry is still there, its heartbeat
 		// simply stops being refreshed. Backdating the score past the window is

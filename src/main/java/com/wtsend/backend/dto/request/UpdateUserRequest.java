@@ -60,4 +60,11 @@ public class UpdateUserRequest {
 
 	@Size(max = 200, message = "The maximum bio length is 200 characters.")
 	private String bio;
+
+	/**
+	 * Boxed, unlike the column: {@code null} has to stay distinguishable from
+	 * {@code false} here or every partial update that left this field out would
+	 * read as "hide me".
+	 */
+	private Boolean showOnlineStatus;
 }

@@ -26,6 +26,7 @@ public class UserResponse {
 
 	private String phone;
 	private boolean phoneVerified;
+	private boolean showOnlineStatus;
 	private String avatarUrl;
 
 	private String avatarId;
