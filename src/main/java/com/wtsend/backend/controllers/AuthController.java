@@ -1,11 +1,9 @@
 package com.wtsend.backend.controllers;
 
-import java.time.Duration;
 import java.util.Map;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,6 +18,7 @@ import com.wtsend.backend.dto.request.SignInRequest;
 import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.response.AuthResponse;
 import com.wtsend.backend.dto.response.UserResponse;
+import com.wtsend.backend.libs.RefreshTokenCookie;
 import com.wtsend.backend.services.interfaces.IAuthService;
 
 import jakarta.validation.Valid;
@@ -32,24 +31,19 @@ public class AuthController {
 
 	private final IAuthService authService;
 
-	private static final String REFRESH_TOKEN = "refreshToken";
-
 	@PostMapping("/refresh")
-	public ResponseEntity<AuthResponse> refreshToken(@CookieValue(name = REFRESH_TOKEN, required = false) String req) {
+	public ResponseEntity<AuthResponse> refreshToken(@CookieValue(name = RefreshTokenCookie.NAME, required = false) String req) {
 		var res = authService.refreshToken(req);
-		ResponseCookie cookie = ResponseCookie.from(REFRESH_TOKEN,
-				res.getRefreshToken()).httpOnly(true)
-				.secure(true).maxAge(Duration.ofDays(7)).path("/").sameSite("None").build();
-		return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookie.toString()).body(res);
+		return ResponseEntity.ok()
+				.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
+				.body(res);
 	}
 
 	@PostMapping("/google")
 	public ResponseEntity<AuthResponse> googleAuth(@RequestBody @Valid GoogleAuthRequest request) {
 		AuthResponse res = authService.googleLogin(request.getCode());
-		ResponseCookie refreshToken = ResponseCookie.from(REFRESH_TOKEN, res.getRefreshToken()).httpOnly(true)
-				.secure(true).maxAge(Duration.ofDays(7)).path("/").sameSite("None").build();
-
-		return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, refreshToken.toString())
+		return ResponseEntity.ok()
+				.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
 				.body(res);
 	}
 
@@ -64,9 +58,8 @@ public class AuthController {
 		AuthResponse res = authService.signIn(request);
 
 		if (res.getRefreshToken() != null) {
-			ResponseCookie refreshToken = ResponseCookie.from(REFRESH_TOKEN, res.getRefreshToken()).httpOnly(true)
-					.secure(true).maxAge(Duration.ofDays(7)).path("/").sameSite("None").build();
-			return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, refreshToken.toString())
+			return ResponseEntity.ok()
+					.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
 					.body(res);
 		}
 
@@ -100,21 +93,14 @@ public class AuthController {
 
 	@PostMapping("/logout")
 	public ResponseEntity<String> signOut(
-			@CookieValue(name = REFRESH_TOKEN, required = false) String refreshToken) {
+			@CookieValue(name = RefreshTokenCookie.NAME, required = false) String refreshToken) {
 		String res = authService.signOut(refreshToken);
 
-		// Revoking the token in Redis is not enough: without an expiring Set-Cookie the
-		// browser keeps sending the dead cookie on every request. The attributes must
-		// match the cookie that was set, or the browser ignores the deletion.
-		ResponseCookie deleteCookie = ResponseCookie.from(REFRESH_TOKEN, "")
-				.httpOnly(true)
-				.secure(true)
-				.path("/")
-				.maxAge(0)
-				.sameSite("None")
-				.build();
-
-		return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, deleteCookie.toString()).body(res);
+		// Revoking in Redis is not enough: without an expiring Set-Cookie the browser
+		// keeps sending the dead cookie on every request.
+		return ResponseEntity.ok()
+				.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.expired().toString())
+				.body(res);
 	}
 
 }

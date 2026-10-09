@@ -187,7 +187,7 @@ public class AuthService implements IAuthService {
 
 	@Override
 	@Transactional
-	public void changePassword(ChangePasswordRequest request, String userId) {
+	public AuthResponse changePassword(ChangePasswordRequest request, String userId) {
 		// This app is an OAuth2 resource server, so the principal is a Jwt, not a
 		// User -- casting the SecurityContext principal here threw ClassCastException.
 		User user = userRepository.findById(userId)
@@ -206,6 +206,17 @@ public class AuthService implements IAuthService {
 
 		// Any session still holding an old refresh token must not survive.
 		refreshTokenRepo.deleteByUserId(userId);
+
+		// Except this one. The caller just proved they know the current password, so
+		// logging them out of the device they are using would be a worse outcome than
+		// the one this protects against -- and silently expiring their session minutes
+		// later, which is what returning nothing did, is worse still.
+		return AuthResponse.builder()
+				.email(user.getEmail())
+				.emailVerified(user.isEmailVerified())
+				.accessToken(jwtService.generateToken(user))
+				.refreshToken(refreshTokenService.create(user).getToken())
+				.build();
 	}
 
 }

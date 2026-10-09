@@ -20,7 +20,11 @@ public interface IAuthService {
 
 	String signOut(String refreshToken);
 
-	void changePassword(ChangePasswordRequest request, String userId);
+	/**
+	 * Revokes every other session and returns a fresh pair for the caller's own
+	 * device, which has just proved it knows the current password.
+	 */
+	AuthResponse changePassword(ChangePasswordRequest request, String userId);
 
 	/** Sends a reset link. Silent for an unknown address, by design. */
 	void forgotPassword(ForgotPasswordRequest request);

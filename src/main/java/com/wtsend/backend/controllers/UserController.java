@@ -2,6 +2,7 @@ package com.wtsend.backend.controllers;
 
 import java.util.Map;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -18,8 +19,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.wtsend.backend.dto.request.ChangePasswordRequest;
 import com.wtsend.backend.dto.request.UpdateUserRequest;
+import com.wtsend.backend.dto.response.AuthResponse;
 import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.dto.response.UserSummaryResponse;
+import com.wtsend.backend.libs.RefreshTokenCookie;
 import com.wtsend.backend.services.interfaces.IAuthService;
 import com.wtsend.backend.services.interfaces.IUserService;
 
@@ -54,11 +57,19 @@ public class UserController {
 	}
 
 	@PutMapping("/password")
-	public ResponseEntity<Void> changePassword(@RequestBody @Valid ChangePasswordRequest request,
+	/**
+	 * Returns a new token pair rather than 204. Changing the password revokes
+	 * every refresh token, including this device's, so a 204 left the client
+	 * working until its access token expired and then dropped it at the login
+	 * screen with no explanation.
+	 */
+	public ResponseEntity<AuthResponse> changePassword(@RequestBody @Valid ChangePasswordRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
 
-		authService.changePassword(request, jwt.getSubject());
-		return ResponseEntity.noContent().build();
+		AuthResponse res = authService.changePassword(request, jwt.getSubject());
+		return ResponseEntity.ok()
+				.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
+				.body(res);
 	}
 
 	@PutMapping("")
