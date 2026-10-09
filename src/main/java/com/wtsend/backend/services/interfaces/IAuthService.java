@@ -1,6 +1,7 @@
 package com.wtsend.backend.services.interfaces;
 
 import com.wtsend.backend.dto.request.ChangePasswordRequest;
+import com.wtsend.backend.dto.request.FacebookAuthRequest;
 import com.wtsend.backend.dto.request.ForgotPasswordRequest;
 import com.wtsend.backend.dto.request.ResetPasswordRequest;
 import com.wtsend.backend.dto.request.SignInRequest;
@@ -30,5 +31,8 @@ public interface IAuthService {
 	void forgotPassword(ForgotPasswordRequest request);
 
 	void resetPassword(ResetPasswordRequest request);
+
+	/** Signs in through Facebook, creating the account on first use. */
+	AuthResponse facebookLogin(FacebookAuthRequest request);
 
 }

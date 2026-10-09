@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.wtsend.backend.dto.RefreshToken;
 import com.wtsend.backend.dto.request.ChangePasswordRequest;
+import com.wtsend.backend.dto.FacebookUser;
+import com.wtsend.backend.dto.request.FacebookAuthRequest;
 import com.wtsend.backend.dto.request.ForgotPasswordRequest;
 import com.wtsend.backend.dto.request.ResetPasswordRequest;
 import com.wtsend.backend.dto.request.SignInRequest;
@@ -45,6 +47,7 @@ public class AuthService implements IAuthService {
 	private final GoogleAuthService googleAuthService;
 	private final ApplicationEventPublisher eventPublisher;
 	private final EmailService emailService;
+	private final FacebookAuthService facebookAuthService;
 
 	public AuthResponse signIn(SignInRequest req) {
 		UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
@@ -81,6 +84,51 @@ public class AuthService implements IAuthService {
 				.accessToken(jwtService.generateToken(user))
 				.refreshToken(refreshTokenService.create(user).getToken())
 				.build();
+	}
+
+	/**
+	 * Signs in through Facebook, creating the account on first use.
+	 *
+	 * <p>
+	 * Matched on email, like Google, so somebody who signed up with a password
+	 * and later uses the Facebook button lands on the same account rather than a
+	 * duplicate. FacebookAuthService has already refused any profile without an
+	 * email, so the lookup key is always present.
+	 */
+	@Override
+	@Transactional
+	public AuthResponse facebookLogin(FacebookAuthRequest request) {
+		FacebookUser facebookUser = facebookAuthService.verify(request.getAccessToken());
+
+		User user = userRepository.findByEmail(facebookUser.email())
+				.orElseGet(() -> userRepository.save(withFreeUsername(userMapper.facebookUserToEntity(facebookUser))));
+
+		return AuthResponse.builder()
+				.email(user.getEmail())
+				.emailVerified(user.isEmailVerified())
+				.accessToken(jwtService.generateToken(user))
+				.refreshToken(refreshTokenService.create(user).getToken())
+				.build();
+	}
+
+	/**
+	 * Provider ids are truncated to fit the 20-character username limit, so two
+	 * of them can collide even though the ids themselves do not. Settles it
+	 * before the insert instead of letting the UNIQUE constraint reject a
+	 * sign-in that is otherwise perfectly valid.
+	 */
+	private User withFreeUsername(User user) {
+		String base = user.getUsername();
+		String candidate = base;
+
+		for (int suffix = 1; userRepository.existsByUsername(candidate); suffix++) {
+			String tail = String.valueOf(suffix);
+			int keep = Math.min(base.length(), UserUtils.MAX_USERNAME_LENGTH - tail.length());
+			candidate = base.substring(0, keep) + tail;
+		}
+
+		user.setUsername(candidate);
+		return user;
 	}
 
 	/**

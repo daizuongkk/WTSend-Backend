@@ -36,8 +36,11 @@ public class SecurityConfig {
 	private final SecurityErrorResponder securityErrorResponder;
 
 	private static final String[] WHITE_LIST = {
-			"/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/login/**", "/oauth2/**", "/error",
-			"/api/auth/google", "/api/verify-email",
+			// /login/** and /oauth2/** used to be here for a .oauth2Login() redirect
+			// flow that was never registered in the filter chain. Both providers go
+			// through POST endpoints instead, so those paths matched nothing.
+			"/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/error",
+			"/api/auth/google", "/api/auth/facebook", "/api/verify-email",
 			// Both are for someone who cannot sign in, so neither can require auth.
 			"/api/auth/forgot-password", "/api/auth/reset-password",
 			// Logout only needs the refresh cookie. Gating it on EMAIL_VERIFIED left

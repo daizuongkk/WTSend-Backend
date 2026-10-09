@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.wtsend.backend.dto.request.FacebookAuthRequest;
 import com.wtsend.backend.dto.request.ForgotPasswordRequest;
 import com.wtsend.backend.dto.request.GoogleAuthRequest;
 import com.wtsend.backend.dto.request.ResetPasswordRequest;
@@ -42,6 +43,20 @@ public class AuthController {
 	@PostMapping("/google")
 	public ResponseEntity<AuthResponse> googleAuth(@RequestBody @Valid GoogleAuthRequest request) {
 		AuthResponse res = authService.googleLogin(request.getCode());
+		return ResponseEntity.ok()
+				.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
+				.body(res);
+	}
+
+	/**
+	 * Mirrors the Google endpoint rather than going through
+	 * {@code .oauth2Login()}: one OAuth mechanism in the app is enough, and the
+	 * redirect flow would need its own success handler, session handling and
+	 * callback URLs for no gain here.
+	 */
+	@PostMapping("/facebook")
+	public ResponseEntity<AuthResponse> facebookAuth(@RequestBody @Valid FacebookAuthRequest request) {
+		AuthResponse res = authService.facebookLogin(request);
 		return ResponseEntity.ok()
 				.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
 				.body(res);

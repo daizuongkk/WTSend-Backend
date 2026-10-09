@@ -44,6 +44,10 @@ public enum ErrorCode {
 	EMAIL_NOT_VERIFIED(2008, HttpStatus.FORBIDDEN, "Email address is not verified"),
 	NO_PASSWORD_SET(2009, HttpStatus.BAD_REQUEST, "Account has no password set"),
 	WRONG_CURRENT_PASSWORD(2010, HttpStatus.BAD_REQUEST, "Current password is incorrect"),
+	FACEBOOK_TOKEN_INVALID(2011, HttpStatus.UNAUTHORIZED, "Facebook token is invalid"),
+	FACEBOOK_VERIFICATION_FAILED(2012, HttpStatus.BAD_GATEWAY, "Could not verify the Facebook token"),
+	FACEBOOK_EMAIL_REQUIRED(2013, HttpStatus.BAD_REQUEST,
+			"Facebook did not provide an email address. Please grant the email permission."),
 
 	// --- 3000-3099 user ---------------------------------------------------
 	USER_NOT_FOUND(3000, HttpStatus.NOT_FOUND, "User not found"),
