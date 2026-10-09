@@ -79,11 +79,19 @@ public class UserService implements IUserService {
 		User user = userRepository.findById(userId)
 				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + userId));
 
+		// Captured before the overwrite: the old id was simply discarded, so every
+		// avatar change left an asset behind in Cloudinary forever.
+		String replacedAvatarId = user.getAvatarId();
+
 		Map<?, ?> result = cloudinary.upload(file);
 
 		user.setAvatarUrl(result.get("secure_url").toString());
 		user.setAvatarId(result.get("public_id").toString());
 		userRepository.save(user);
+
+		// Only once the replacement is stored, and never fatally -- see
+		// destroyQuietly.
+		cloudinary.destroyQuietly(replacedAvatarId);
 
 		return user.getAvatarUrl();
 
