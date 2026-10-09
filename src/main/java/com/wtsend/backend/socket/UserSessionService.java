@@ -18,8 +18,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class UserSessionService {
 	private final UserService userService;
-	private final OnlineUserStore onlineUsers;
+	private final RedisPresenceStore onlineUsers;
 	private final ConversationService conversationService;
+	private final SocketRelay relay;
 
 	public void onClientConnected(Object authToken, SocketIOClient client) {
 		if (authToken == null) {
@@ -49,7 +50,7 @@ public class UserSessionService {
 		client.sendEvent("online-users", onlineUsers.onlineUserIds());
 
 		if (cameOnline)
-			broadcastPresence(client, user.getId(), true);
+			broadcastPresence(user.getId(), true);
 	}
 
 	public void onClientDisconnected(SocketIOClient client) {
@@ -60,21 +61,33 @@ public class UserSessionService {
 		// Only the last socket closing takes the user offline; a second tab must
 		// not look like a disconnect.
 		if (onlineUsers.remove(user.getId(), client.getSessionId()))
-			broadcastPresence(client, user.getId(), false);
+			broadcastPresence(user.getId(), false);
 
 		log.info("{} disconnected.", user.getUsername());
 	}
 
-	private void broadcastPresence(SocketIOClient client, String userId, boolean online) {
-		client.getNamespace()
-				.getBroadcastOperations()
-				.sendEvent("presence-changed", new PresenceChange(userId, online));
+	/**
+	 * Through the relay, so a client on another instance hears about it too --
+	 * this used to go to the arriving client's namespace, which is this process
+	 * only.
+	 */
+	private void broadcastPresence(String userId, boolean online) {
+		relay.toAll("presence-changed", new PresenceChange(userId, online));
 	}
 
 	public void subscribeUserToConversations(SocketIOClient client) {
 		UserResponse user = client.get("user");
 		if (user == null)
 			return;
+
+		// The personal room first, and unconditionally. It used to be joined
+		// after the loop below, behind an early return for "this user has no
+		// conversations yet" -- so a brand new account joined no room at all,
+		// and since every message is addressed to the participants' personal
+		// rooms, nothing could ever be delivered to it. The first conversation
+		// of a user's life was the one case that never worked.
+		client.joinRoom(SocketRooms.user(user.getId()));
+
 		List<Long> conversationIds = conversationService.getConversationIdsByUserId(user.getId());
 		if (conversationIds == null || conversationIds.isEmpty())
 			return;
@@ -83,8 +96,6 @@ public class UserSessionService {
 			client.joinRoom(SocketRooms.conversation(ci));
 			log.info("{} joined to room {} ", user.getUsername(), ci);
 		});
-
-		client.joinRoom(SocketRooms.user(user.getId()));
 	}
 
 }

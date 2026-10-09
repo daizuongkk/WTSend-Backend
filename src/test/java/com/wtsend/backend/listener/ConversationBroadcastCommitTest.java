@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -137,8 +138,11 @@ class ConversationBroadcastCommitTest {
 	void aCommittedReadReceiptIsBroadcast() {
 		conversationService.markAsSeen(conversationId, readerId);
 
-		verify(server).getRoomOperations(eq(SocketRooms.conversation(conversationId)));
-		verify(roomOperations).sendEvent(eq("read-message"), any(Object.class));
+		// Addressed to the participants' own rooms rather than the
+		// conversation's -- see SocketRelay.toConversation for why.
+		createdUserIds.forEach(userId -> verify(server).getRoomOperations(eq(SocketRooms.user(userId))));
+		verify(roomOperations, times(createdUserIds.size()))
+				.sendEvent(eq("read-message"), any(Object.class));
 	}
 
 	@Test

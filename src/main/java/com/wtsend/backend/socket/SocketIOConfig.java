@@ -2,6 +2,9 @@ package com.wtsend.backend.socket;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.listener.ChannelTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 
@@ -10,8 +13,6 @@ import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.annotation.SpringAnnotationScanner;
 import com.corundumstudio.socketio.protocol.JacksonJsonSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.services.UserService;
 
@@ -36,8 +37,7 @@ public class SocketIOConfig {
 			@Override
 			protected void init(ObjectMapper objectMapper) {
 				super.init(objectMapper);
-				objectMapper.registerModule(new JavaTimeModule());
-				objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+				SocketJson.configure(objectMapper);
 			}
 		});
 		config.setHostname(properties.getHost());
@@ -86,5 +86,20 @@ public class SocketIOConfig {
 	@Bean
 	public SpringAnnotationScanner springAnnotationScanner(SocketIOServer server) {
 		return new SpringAnnotationScanner(server);
+	}
+
+	/**
+	 * Subscribes this instance to the relay channel. Boot autoconfigures a Redis
+	 * connection factory but no listener container, so without this the relay
+	 * would publish and nobody would be listening -- and the symptom would be
+	 * silence on the other instance, not an error here.
+	 */
+	@Bean
+	public RedisMessageListenerContainer socketRelayContainer(
+			RedisConnectionFactory connectionFactory, SocketRelay relay) {
+		RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+		container.setConnectionFactory(connectionFactory);
+		container.addMessageListener(relay, new ChannelTopic(SocketRelay.CHANNEL));
+		return container;
 	}
 }

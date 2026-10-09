@@ -6,9 +6,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import com.corundumstudio.socketio.SocketIOServer;
 import com.wtsend.backend.event.NewMessageEvent;
-import com.wtsend.backend.socket.SocketRooms;
+import com.wtsend.backend.socket.SocketRelay;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,15 +16,14 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class MessageNotificationListener {
-	private final SocketIOServer server;
+	private final SocketRelay relay;
 
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void onNewMessage(NewMessageEvent event) {
 		try {
-			server.getRoomOperations(SocketRooms.conversation(event.getConversationId()))
-					.sendEvent("new-message", Map.of(
-							"message", event.getMessage(),
-							"conversation", event.getConversation()));
+			relay.toConversation(event.getConversation(), "new-message", Map.of(
+					"message", event.getMessage(),
+					"conversation", event.getConversation()));
 		} catch (Exception e) {
 			// The transaction is already committed; an exception here would be
 			// swallowed by Spring and the message would vanish without a trace.
