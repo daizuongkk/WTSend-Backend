@@ -112,6 +112,7 @@ public class FriendRequestService implements IFriendRequestService {
 	}
 
 	@Override
+	@Transactional(readOnly = true)
 	public Map<String, List<FriendRequestResponse>> getFriendRequests(String userId) {
 
 		List<FriendRequestResponse> sent = friendRequestRepo.findByFromUserId(userId).stream()

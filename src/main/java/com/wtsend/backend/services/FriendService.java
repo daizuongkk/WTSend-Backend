@@ -3,6 +3,7 @@ package com.wtsend.backend.services;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.wtsend.backend.dto.response.FriendResponse;
 import com.wtsend.backend.libs.utils.UserUtils;
@@ -23,6 +24,7 @@ public class FriendService implements IFriendService {
 	}
 
 	@Override
+	@Transactional(readOnly = true)
 	public List<FriendResponse> getAllFriends(String userId) {
 		List<Friend> friends = friendRepo.findFriends(userId);
 
@@ -34,6 +36,7 @@ public class FriendService implements IFriendService {
 				.toList();
 	}
 
+	@Transactional(readOnly = true)
 	public boolean isFriend(String userA, String userB) {
 
 		return friendRepo.existsByUserAIdAndUserBId(userA, userB) || friendRepo.existsByUserAIdAndUserBId(userB, userA);

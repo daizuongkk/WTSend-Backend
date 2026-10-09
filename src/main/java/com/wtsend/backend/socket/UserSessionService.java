@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.corundumstudio.socketio.SocketIOClient;
+import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.services.ConversationService;
 import com.wtsend.backend.services.UserService;
@@ -29,9 +30,11 @@ public class UserSessionService {
 		UserResponse user;
 		try {
 			// findById throws for an unknown id, it never returns null -- unguarded,
-			// a deleted user threw straight out of netty's connect listener.
+			// a deleted user threw straight out of netty's connect listener. Catching
+			// AppException rather than RuntimeException so a genuine mapping failure
+			// still surfaces instead of being reported as "no such user".
 			user = userService.findById(userId);
-		} catch (RuntimeException e) {
+		} catch (AppException e) {
 			log.warn("Rejecting socket {}: no user for id {}", client.getSessionId(), userId);
 			client.disconnect();
 			return;

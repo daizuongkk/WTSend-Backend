@@ -42,7 +42,7 @@ public class AuthController {
 
 	@PostMapping("/google")
 	public ResponseEntity<AuthResponse> googleAuth(@RequestBody @Valid GoogleAuthRequest request) {
-		AuthResponse res = authService.googleLogin(request.getCredential());
+		AuthResponse res = authService.googleLogin(request.getCode());
 		ResponseCookie refreshToken = ResponseCookie.from(REFRESH_TOKEN, res.getRefreshToken()).httpOnly(true)
 				.secure(true).maxAge(Duration.ofDays(7)).path("/").sameSite("None").build();
 

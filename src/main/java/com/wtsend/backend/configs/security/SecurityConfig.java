@@ -109,8 +109,8 @@ public class SecurityConfig {
 
 		configuration.setAllowCredentials(true);
 
-		configuration.setExposedHeaders(List.of(
-				"Authorization"));
+		// No exposed headers: tokens travel in the JSON body and the refresh cookie,
+		// so the Authorization header was exposed to the browser for nothing.
 
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 

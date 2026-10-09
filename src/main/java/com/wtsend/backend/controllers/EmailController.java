@@ -10,16 +10,19 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.wtsend.backend.dto.response.AuthResponse;
 import com.wtsend.backend.services.interfaces.IEmailService;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api")
+@Validated
 @RequiredArgsConstructor
 public class EmailController {
 	private final IEmailService emailService;
@@ -32,7 +35,7 @@ public class EmailController {
 	}
 
 	@PostMapping("/verify-email")
-	public ResponseEntity<AuthResponse> verifyEmail(@RequestParam(name = "token") String token) {
+	public ResponseEntity<AuthResponse> verifyEmail(@RequestParam(name = "token") @NotBlank(message = "Verification token is required") String token) {
 
 		AuthResponse response = emailService.verifyEmail(token);
 		ResponseCookie refreshToken = ResponseCookie.from("refreshToken", response.getRefreshToken()).httpOnly(true)

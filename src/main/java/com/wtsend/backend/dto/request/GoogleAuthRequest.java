@@ -7,6 +7,17 @@ import lombok.Setter;
 @Getter
 @Setter
 public class GoogleAuthRequest {
-	@NotBlank(message = "Credential is required")
-	private String credential;
+
+	/**
+	 * An OAuth2 authorization code, not an ID token.
+	 *
+	 * <p>
+	 * The client uses Google Identity Services with {@code flow: "auth-code"},
+	 * and {@code GoogleAuthService} exchanges this for tokens against the
+	 * {@code postmessage} redirect URI. It was called {@code credential}, the
+	 * name GIS uses for the ID token in its other flow, which reads as though
+	 * the wrong thing is being sent here.
+	 */
+	@NotBlank(message = "Authorization code is required")
+	private String code;
 }

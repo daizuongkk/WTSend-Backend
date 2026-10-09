@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.wtsend.backend.dto.request.ChangePasswordRequest;
@@ -23,10 +24,12 @@ import com.wtsend.backend.services.interfaces.IAuthService;
 import com.wtsend.backend.services.interfaces.IUserService;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/users")
+@Validated
 @RequiredArgsConstructor
 public class UserController {
 	private final IUserService userService;
@@ -38,7 +41,7 @@ public class UserController {
 	}
 
 	@GetMapping("/search")
-	public ResponseEntity<UserSummaryResponse> searchUserByUsername(@RequestParam(name = "username") String username) {
+	public ResponseEntity<UserSummaryResponse> searchUserByUsername(@RequestParam(name = "username") @NotBlank(message = "Username is required") String username) {
 		return ResponseEntity.ok(userService.findByUsername(username));
 	}
 

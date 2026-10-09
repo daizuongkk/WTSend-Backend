@@ -5,6 +5,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.wtsend.backend.dto.request.SignUpRequest;
@@ -45,17 +46,20 @@ public class UserService implements IUserService {
 	}
 
 	@Override
+	@Transactional(readOnly = true)
 	public UserResponse me(String userId) {
 		return findById(userId);
 	}
 
 	@Override
+	@Transactional(readOnly = true)
 	public UserResponse findById(String id) {
 		User user = userRepository.findById(id)
 				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + id));
 		return userMapper.toUserResponse(user);
 	}
 
+	@Transactional(readOnly = true)
 	public UserSummaryResponse findByUsername(String username) {
 		if (username == null || username.trim().isBlank())
 			throw new AppException(ErrorCode.USERNAME_REQUIRED);

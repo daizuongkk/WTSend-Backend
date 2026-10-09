@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.validation.annotation.Validated;
 
 import com.wtsend.backend.dto.request.CreateConversationRequest;
 import com.wtsend.backend.dto.response.ConversationResponse;
@@ -20,6 +21,7 @@ import jakarta.validation.constraints.NotNull;
 
 @RestController
 @RequestMapping("/api/conversations")
+@Validated
 public class ConversationController {
 
 	private final IConversationService conversationService;

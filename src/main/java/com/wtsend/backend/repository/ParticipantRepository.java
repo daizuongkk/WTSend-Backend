@@ -1,6 +1,5 @@
 package com.wtsend.backend.repository;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,8 +27,4 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
 	@Query("UPDATE Participant p SET p.unreadCounts = 0 " +
 			"WHERE p.conversation.id = :convId AND p.user.id = :senderId")
 	void resetUnreadCountForSender(@Param("convId") Long convId, @Param("senderId") String senderId);
-
-	@Modifying(clearAutomatically = true, flushAutomatically = true)
-	@Query("UPDATE Conversation c SET c.lastMessageAt = :time, c.lastMessage.id = :messageId WHERE c.id = :id")
-	void updateLastMessage(@Param("id") Long id, @Param("time") Instant time, @Param("messageId") Long messageId);
 }
