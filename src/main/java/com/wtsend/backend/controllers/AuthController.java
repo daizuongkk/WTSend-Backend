@@ -1,6 +1,7 @@
 package com.wtsend.backend.controllers;
 
 import java.time.Duration;
+import java.util.Map;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -12,7 +13,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.wtsend.backend.dto.request.ForgotPasswordRequest;
 import com.wtsend.backend.dto.request.GoogleAuthRequest;
+import com.wtsend.backend.dto.request.ResetPasswordRequest;
 import com.wtsend.backend.dto.request.SignInRequest;
 import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.response.AuthResponse;
@@ -68,6 +71,31 @@ public class AuthController {
 		}
 
 		return ResponseEntity.ok(res);
+	}
+
+	/**
+	 * Always 200 for an address with no account, so this cannot be used to
+	 * discover which addresses are registered. An unverified account is the one
+	 * exception and reports EMAIL_NOT_VERIFIED -- it is sent a verification link
+	 * instead, since resetting through an unproven address would defeat the
+	 * verification flow.
+	 */
+	@PostMapping("/forgot-password")
+	public ResponseEntity<Map<String, String>> forgotPassword(@RequestBody @Valid ForgotPasswordRequest request) {
+		authService.forgotPassword(request);
+		return ResponseEntity.ok(Map.of("message",
+				"Nếu địa chỉ này có tài khoản, chúng tôi đã gửi email đặt lại mật khẩu."));
+	}
+
+	/**
+	 * No tokens in the response on purpose: the reset revokes every session, so
+	 * handing back a fresh one would contradict that, and signing in with the new
+	 * password confirms it is what the user meant to set.
+	 */
+	@PostMapping("/reset-password")
+	public ResponseEntity<Map<String, String>> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
+		authService.resetPassword(request);
+		return ResponseEntity.ok(Map.of("message", "Đặt lại mật khẩu thành công, hãy đăng nhập lại."));
 	}
 
 	@PostMapping("/logout")

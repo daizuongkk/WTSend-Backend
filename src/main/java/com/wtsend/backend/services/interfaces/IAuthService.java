@@ -1,6 +1,8 @@
 package com.wtsend.backend.services.interfaces;
 
 import com.wtsend.backend.dto.request.ChangePasswordRequest;
+import com.wtsend.backend.dto.request.ForgotPasswordRequest;
+import com.wtsend.backend.dto.request.ResetPasswordRequest;
 import com.wtsend.backend.dto.request.SignInRequest;
 import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.response.AuthResponse;
@@ -19,5 +21,10 @@ public interface IAuthService {
 	String signOut(String refreshToken);
 
 	void changePassword(ChangePasswordRequest request, String userId);
+
+	/** Sends a reset link. Silent for an unknown address, by design. */
+	void forgotPassword(ForgotPasswordRequest request);
+
+	void resetPassword(ResetPasswordRequest request);
 
 }

@@ -11,4 +11,12 @@ public interface IEmailService {
 	/** Resolves the user itself, so callers don't need repository access. */
 	void sendVerifyLink(String userId);
 
+	void sendPasswordResetLink(User user);
+
+	/**
+	 * Validates and consumes a reset token, returning its owner. Setting the
+	 * password is the caller's job -- this service owns tokens and mail.
+	 */
+	User consumePasswordResetToken(String token);
+
 }

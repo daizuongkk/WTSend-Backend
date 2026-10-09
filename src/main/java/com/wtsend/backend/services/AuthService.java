@@ -11,10 +11,13 @@ import org.springframework.transaction.annotation.Transactional;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.wtsend.backend.dto.RefreshToken;
 import com.wtsend.backend.dto.request.ChangePasswordRequest;
+import com.wtsend.backend.dto.request.ForgotPasswordRequest;
+import com.wtsend.backend.dto.request.ResetPasswordRequest;
 import com.wtsend.backend.dto.request.SignInRequest;
 import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.response.AuthResponse;
 import com.wtsend.backend.dto.response.UserResponse;
+import com.wtsend.backend.event.PasswordResetRequestedEvent;
 import com.wtsend.backend.event.VerificationEmailRequestedEvent;
 import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
@@ -41,6 +44,7 @@ public class AuthService implements IAuthService {
 	private final PasswordEncoder passwordEncoder;
 	private final GoogleAuthService googleAuthService;
 	private final ApplicationEventPublisher eventPublisher;
+	private final EmailService emailService;
 
 	public AuthResponse signIn(SignInRequest req) {
 		UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
@@ -122,6 +126,63 @@ public class AuthService implements IAuthService {
 				.refreshToken(newRfToken.getToken())
 				.accessToken(newAccessToken)
 				.build();
+	}
+
+	/**
+	 * Requests a reset link.
+	 *
+	 * <p>
+	 * An unknown address returns normally and sends nothing, so this cannot be
+	 * used to discover which addresses have accounts.
+	 *
+	 * <p>
+	 * An account whose email is not verified gets the verification link instead,
+	 * and the caller is told so: letting someone set a password through an
+	 * address they have not proved they own is the hole the whole verification
+	 * flow exists to close. Sending the verification mail rather than nothing
+	 * leaves them a way forward -- and verifying also rescues the account from
+	 * UnverifiedAccountCleanupJob.
+	 *
+	 * <p>
+	 * An account with no password (signed up through Google) is allowed: owning
+	 * the mailbox is the same proof the link relies on, and the result is that
+	 * password login becomes available alongside Google.
+	 */
+	@Override
+	public void forgotPassword(ForgotPasswordRequest request) {
+		User user = userRepository.findByEmail(request.getEmail()).orElse(null);
+		if (user == null) {
+			log.info("Password reset requested for an address with no account");
+			return;
+		}
+
+		if (!user.isEmailVerified()) {
+			eventPublisher.publishEvent(new VerificationEmailRequestedEvent(user.getId()));
+			throw new AppException(ErrorCode.EMAIL_NOT_VERIFIED)
+					.withDetail("userId=" + user.getId() + " (asked for a password reset before verifying)");
+		}
+
+		eventPublisher.publishEvent(new PasswordResetRequestedEvent(user.getId()));
+	}
+
+	/**
+	 * Consumes the token, sets the password, and drops every session.
+	 *
+	 * <p>
+	 * Revoking follows changePassword: a reset is what someone does when they
+	 * believe the account is compromised, so a session holding an old refresh
+	 * token must not outlive it. Nothing is returned -- the client signs in with
+	 * the new password, which also confirms it is what they meant to set.
+	 */
+	@Override
+	@Transactional
+	public void resetPassword(ResetPasswordRequest request) {
+		User user = emailService.consumePasswordResetToken(request.getToken());
+
+		user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+		userRepository.save(user);
+
+		refreshTokenRepo.deleteByUserId(user.getId());
 	}
 
 	@Override

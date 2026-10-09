@@ -77,6 +77,9 @@ public enum ErrorCode {
 	OTP_INCORRECT(6004, HttpStatus.BAD_REQUEST, "OTP code is incorrect"),
 	OTP_MAX_ATTEMPTS(6005, HttpStatus.TOO_MANY_REQUESTS,
 			"You have entered incorrectly too many times, please request a new OTP"),
+	PASSWORD_RESET_TOKEN_INVALID(6006, HttpStatus.BAD_REQUEST, "Password reset link is invalid or expired"),
+	PASSWORD_RESET_COOLDOWN(6007, HttpStatus.TOO_MANY_REQUESTS,
+			"Please wait before requesting another password reset email"),
 
 	// --- 7000-7099 media --------------------------------------------------
 	FILE_REQUIRED(7000, HttpStatus.BAD_REQUEST, "No file uploaded"),

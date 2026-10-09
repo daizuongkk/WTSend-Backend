@@ -18,9 +18,11 @@ import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.EmailTemplateRender;
 import com.wtsend.backend.libs.TokenGenerator;
 import com.wtsend.backend.model.EmailVerificationToken;
+import com.wtsend.backend.model.PasswordResetToken;
 import com.wtsend.backend.model.Otp;
 import com.wtsend.backend.model.User;
 import com.wtsend.backend.repository.EmailVerificationTokenRepository;
+import com.wtsend.backend.repository.PasswordResetTokenRepository;
 import com.wtsend.backend.repository.OtpRepository;
 import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IEmailService;
@@ -50,6 +52,7 @@ public class EmailService implements IEmailService {
 
 	private final EmailTemplateRender templateRender;
 	private final EmailVerificationTokenRepository emailVerificationTokenRepo;
+	private final PasswordResetTokenRepository passwordResetTokenRepo;
 	private final TokenGenerator tokenGenerator;
 	private final UserRepository userRepo;
 	private final JwtService jwtService;
@@ -89,6 +92,72 @@ public class EmailService implements IEmailService {
 	public void sendVerifyLink(String userId) {
 		sendVerifyLink(userRepo.findById(userId)
 				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + userId)));
+	}
+
+	@Override
+	public void sendPasswordResetLink(User user) {
+
+		PasswordResetToken existingToken = passwordResetTokenRepo.findByUserId(user.getId()).orElse(null);
+
+		// Outside the try for the same reason as the verification cooldown: a
+		// blanket catch would swallow it and the client would never see it.
+		if (existingToken != null && existingToken.getCooldownUntil() != null &&
+				existingToken.getCooldownUntil().isAfter(Instant.now())) {
+
+			long retryAfter = Duration.between(Instant.now(), existingToken.getCooldownUntil()).getSeconds();
+
+			throw new AppException(ErrorCode.PASSWORD_RESET_COOLDOWN)
+					.withDetail("userId=" + user.getId() + " retryAfterSeconds=" + retryAfter);
+		}
+
+		String token = tokenGenerator.generateVerificationToken();
+
+		CreateEmailOptions params = CreateEmailOptions.builder().from(fromEmail).to(user.getEmail())
+				.subject("Đặt lại mật khẩu")
+				.html(templateRender.render("emails/forgot-password", Map.of(
+						"resetPasswordLink", frontendUrl + "/reset-password?token=" + token)))
+				.build();
+
+		CreateEmailResponse response;
+		try {
+			response = resend.emails().send(params);
+		} catch (ResendException e) {
+			log.error("Failed to send password reset email to {}", user.getEmail(), e);
+			throw new AppException(ErrorCode.EMAIL_SEND_FAILED, e);
+		}
+
+		// Only one live reset link per user: issuing a second must retire the first,
+		// or an older link stays usable for its full TTL.
+		passwordResetTokenRepo.deleteAllByUserId(user.getId());
+
+		passwordResetTokenRepo.save(PasswordResetToken.builder()
+				.token(token)
+				.userId(user.getId())
+				.expiresIn(PasswordResetToken.TTL_MINUTES)
+				.cooldownUntil(Instant.now().plusSeconds(PasswordResetToken.COOLDOWN_SECONDS))
+				.build());
+
+		log.info("Password reset email sent successfully. EmailId={}, To={}", response.getId(), user.getEmail());
+	}
+
+	/**
+	 * Consumes the token and returns the user it belongs to. The caller sets the
+	 * new password: this class owns tokens and mail, not credentials.
+	 */
+	@Override
+	public User consumePasswordResetToken(String token) {
+		PasswordResetToken tokenEntity = passwordResetTokenRepo.findByToken(token)
+				.orElseThrow(() -> new AppException(ErrorCode.PASSWORD_RESET_TOKEN_INVALID));
+
+		User user = userRepo.findById(tokenEntity.getUserId())
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND)
+						.withDetail("id=" + tokenEntity.getUserId() + " (referenced by a password reset token)"));
+
+		// Single use. Deleting by user id as well clears any sibling left behind.
+		passwordResetTokenRepo.deleteAllByUserId(user.getId());
+		passwordResetTokenRepo.delete(tokenEntity);
+
+		return user;
 	}
 
 	@Override

@@ -38,6 +38,8 @@ public class SecurityConfig {
 	private static final String[] WHITE_LIST = {
 			"/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/login/**", "/oauth2/**", "/error",
 			"/api/auth/google", "/api/verify-email",
+			// Both are for someone who cannot sign in, so neither can require auth.
+			"/api/auth/forgot-password", "/api/auth/reset-password",
 			// Logout only needs the refresh cookie. Gating it on EMAIL_VERIFIED left
 			// unverified users -- who do get an access token -- unable to log out.
 			"/api/auth/logout"
