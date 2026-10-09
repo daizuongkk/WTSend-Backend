@@ -48,6 +48,71 @@ services:
       timeout: 3s
       retries: 5
 
+
+  kafka:
+    # KRaft built in, no ZooKeeper, no Confluent licence. Pinned: the image's
+    # environment contract has changed between releases, and this one needs
+    # CLUSTER_ID (not KAFKA_CLUSTER_ID) or it refuses to format its log dir.
+    image: apache/kafka:4.1.0
+    restart: unless-stopped
+    ports:
+      # Host side is 29092 ONLY. 9092 is the netty-socketio server -- Kafka's
+      # conventional port collides with it.
+      - "29092:29092"
+    environment:
+      CLUSTER_ID: zlOMpLFOR5aJHp9su4mpoQ
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092
+      # Two advertised listeners, and both are needed. advertised.listeners is
+      # the address the broker tells a client to come back to after bootstrap:
+      # the Spring app runs on the host and needs localhost:29092, while
+      # kafka-ui is inside this network and needs kafka:9092. Advertise only
+      # the latter and the app bootstraps fine and then hangs on the first
+      # send, surfacing as a max.block.ms timeout rather than a connection
+      # error.
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      # Mandatory on a single broker: the default of 3 would leave the internal
+      # topics uncreatable.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Off in every environment. On, a typo in a topic name silently creates a
+      # one-partition topic and the producer writes into nowhere.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+  kafka-ui:
+    # kafbat is the maintained fork; provectuslabs/kafka-ui is archived.
+    image: ghcr.io/kafbat/kafka-ui:latest
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      # 8080 is the Spring app.
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: wtsend-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+
 volumes:
   mysql-data:
   redis-data:
+  kafka-data:

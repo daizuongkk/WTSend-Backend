@@ -10,13 +10,13 @@ WTSend backend — a real-time chat/messaging API. Spring Boot 4.1.x, Java 21, M
 
 ```bash
 ./mvnw spring-boot:run                                  # run the app (needs MySQL + Redis up)
-docker compose up -d --wait                             # MySQL (3306) + Redis (6379)
+docker compose up -d --wait                              # MySQL 3306, Redis 6379, Kafka 29092, kafka-ui 8090
 ./mvnw clean package                                    # build jar (runs tests)
 ./mvnw test                                             # all tests
 ./mvnw test -Dtest=BackendApplicationTests#methodName   # single test
 ```
 
-Most tests are plain Mockito/JUnit and need no infrastructure. Four need MySQL and Redis reachable, because they boot the context: `BackendApplicationTests`, `ConversationQueryCountTest`, `ConversationBroadcastCommitTest`, `UnverifiedAccountCleanupJobTest`. Use `./mvnw clean package -DskipTests` when the stack is down.
+Most tests are plain Mockito/JUnit and need no infrastructure. Six boot the context and so need MySQL and Redis reachable: `BackendApplicationTests`, `ConversationQueryCountTest`, `ConversationBroadcastCommitTest`, `UnverifiedAccountCleanupJobTest`, `RedisPresenceStoreTest`, `SocketRelayChannelTest`, `RequestDeserializationTest`. `EmailNotificationFlowTest` needs neither -- it is a slice over an embedded broker, and `@EnableAutoConfiguration` there would drag in the datasource and defeat the point. Use `./mvnw clean package -DskipTests` when the stack is down.
 
 **A second Spring context in the same JVM collides on socket port 9092**, since `SocketIOServerRunner` binds it from a `CommandLineRunner` and the first context never releases it — the failure reads `Failed to execute CommandLineRunner`. Any test whose configuration forks a new context must either mock `SocketIOServer` or set `socketio.port=0`; the existing context-booting tests do one or the other.
 
@@ -84,6 +84,26 @@ External services: **Cloudinary** (media upload, `CloudinaryService`), **Resend*
 **Jackson 3.** Boot 4 autoconfigures `tools.jackson.databind.json.JsonMapper`; there is **no** `com.fasterxml.jackson.databind.ObjectMapper` bean. Jackson 2 is still on the classpath only because netty-socketio's `JacksonJsonSupport` needs it, and `SocketIOConfig` builds its own Jackson 2 mapper for that. Inject the Jackson 3 type in application code — asking for the Jackson 2 one fails context startup.
 
 **Autoconfiguration is split per technology.** `spring-boot-jackson`, `spring-boot-flyway`, and so on. Adding the plain library (`flyway-core`) gives you the classes and none of the wiring, and the symptom is silence rather than an error.
+
+## Kafka: one topic, for email
+
+Scope is deliberately small: `wtsend.notify.email.v1` plus its `.dlt`, and nothing else. Verification and password-reset mail is produced there instead of being sent on the request thread. What the hop buys is not speed -- it is that a failed send leaves a record in the dead-letter topic that can be read and replayed, where before it was a log line and nothing else.
+
+- **`KafkaEventPublisher` is the only place anything is written.** Adding a topic is an edit to one class, and the day an outbox is wanted, `publishEmail` becomes a row insert with nothing above it changing.
+- **The event carries a user id and a kind. Nothing else.** No token (records live seven days; a live verification token in one is a credential at rest), no email address (a copy of a column the consumer is about to read, in a log that outlives the request), no rendered HTML (fixing a template typo would otherwise mean replaying the topic).
+- **Kafka down must not take the API with it.** `admin.fail-fast=false`, and `max.block.ms=5000` instead of the default 60s, which would park a Tomcat thread per send until the pool was gone. Verified by running with the broker stopped: the app boots, `/api/auth/register` answers 201, and the lost event is logged at ERROR with its ids and counted in `wtsend.kafka.send.failures`. **There is deliberately no Kafka health indicator** -- wiring one into `/actuator/health` would let a broker outage fail a liveness probe and have the orchestrator kill healthy pods.
+- `/actuator/**` currently requires a JWT, because `SecurityConfig` ends in `anyRequest().authenticated()` and nothing exempts it. Fine as a default; a deployment wanting an HTTP liveness probe has to open `/actuator/health` deliberately.
+
+### Things here that cost real time to find
+
+- **`delivery.timeout.ms` must be ≥ `linger.ms` + `request.timeout.ms`.** With the default 30s request timeout, `delivery.timeout.ms=30000` is *rejected* and the producer cannot be constructed at all -- every send then fails with a `ConfigException` and nothing is ever published. Hence `request.timeout.ms=10000`. The embedded-Kafka test now sets the same values so an invalid combination fails there rather than in production.
+- **The dead-letter template cannot be the ordinary one.** A record that failed to deserialise reaches the recoverer as the raw `byte[]`, and a JSON serializer turns that into base64 -- the DLT held `"e3t7"` where the original bytes were `{{{`, so replaying a poison pill replayed base64. `KafkaProducerConfig` builds one template with a `DelegatingByTypeSerializer` (byte[] → raw, everything else → JSON) and that same template serves both paths. Declaring a `KafkaTemplate` bean also switches Boot's own off, which is why the producer's serializers are not set in properties.
+- **`ErrorHandlingDeserializer` is not optional.** Without it a malformed record throws inside `Consumer.poll()`, before the listener or the error handler can see it: the offset never advances, the next poll throws on the same record, and that partition pins a core for ever.
+- **Do not list `AppException` as non-retryable.** It covers both `USER_NOT_FOUND` (deterministic) and `EMAIL_SEND_FAILED` wrapping a 503 from Resend (exactly what retrying is for). `EmailNotificationConsumer` sorts by `ErrorCode` and wraps only the deterministic ones in `NonRetryableEventException`. One known roughness: a Resend 422 (invalid address) is permanent but arrives as `EMAIL_SEND_FAILED`, so it burns five attempts before the DLT.
+- **Deduplication is the cooldown that was already there.** `VERIFY_EMAIL_COOLDOWN` from `EmailService` is treated as success by the consumer. No new state, and it deduplicates by intent ("do not spam this user") rather than by event id.
+- Boot 4 moved the Kafka autoconfiguration to `org.springframework.boot.kafka.autoconfigure`, and spring-kafka 4.1 ships **two** sets of JSON serializers: `JsonSerializer`/`JsonDeserializer` (Jackson 2) and `JacksonJsonSerializer`/`JacksonJsonDeserializer` (Jackson 3). This app is on Jackson 3, so it uses the latter. Spring 7 also removed `ExponentialBackOffWithMaxRetries`; `ExponentialBackOff` carries `maxAttempts` itself now.
+- The broker image is `apache/kafka:4.1.0` and needs **`CLUSTER_ID`**, not `KAFKA_CLUSTER_ID`. Host access is on **29092** only -- 9092 is the netty-socketio server -- and it advertises two listeners because the app runs on the host while kafka-ui runs inside the compose network. Advertise only `kafka:9092` and the app bootstraps fine, then hangs on the first send.
+- `traceId` comes from `RequestTraceFilter` (honours an inbound `X-Request-Id`, echoes it back) and travels in the event envelope so a signup and the email it causes minutes later on a consumer thread share one id. It was null on every record until that filter existed.
 
 ## Scheduled work
 
