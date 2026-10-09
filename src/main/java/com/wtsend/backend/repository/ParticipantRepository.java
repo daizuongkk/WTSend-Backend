@@ -12,10 +12,6 @@ import com.wtsend.backend.model.Participant;
 import com.wtsend.backend.model.User;
 
 public interface ParticipantRepository extends JpaRepository<Participant, Long> {
-	List<Participant> findByUser_id_In(List<String> userId);
-
-	Optional<Participant> findByUser(User user);
-
 	Optional<Participant> findByConversationIdAndUserId(Long id, String userId);
 
 	@Modifying(clearAutomatically = true, flushAutomatically = true)

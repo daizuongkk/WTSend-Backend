@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -66,6 +67,7 @@ class ConversationBroadcastCommitTest {
 	private TransactionTemplate transactions;
 	private Long conversationId;
 	private String readerId;
+	private final List<String> createdUserIds = new ArrayList<>();
 
 	@BeforeEach
 	void setUp() {
@@ -78,6 +80,8 @@ class ConversationBroadcastCommitTest {
 			User reader = userRepository.save(User.builder()
 					.email("reader-" + System.nanoTime() + "@example.com").displayName("Reader").build());
 			readerId = reader.getId();
+			createdUserIds.add(sender.getId());
+			createdUserIds.add(reader.getId());
 
 			Conversation conversation = new Conversation();
 			conversation.setType(ConversationType.DIRECT);
@@ -100,6 +104,33 @@ class ConversationBroadcastCommitTest {
 
 			conversationId = conversation.getId();
 		});
+	}
+
+	/**
+	 * This test cannot use @Transactional -- it has to commit for AFTER_COMMIT to
+	 * fire at all -- so it has to clean up after itself. Left behind, its users
+	 * sat in the dev database until they were a day old, at which point
+	 * UnverifiedAccountCleanupJobTest tried to delete them and hit the foreign key
+	 * from their messages.
+	 */
+	@AfterEach
+	void removeWhatThisTestCommitted() {
+		transactions.executeWithoutResult(status -> {
+			conversationRepo.findByIdWithGraph(conversationId).ifPresent(conversation -> {
+				// conversations.last_message_id and participants.last_seen_message_id
+				// both point at rows the cascade is about to remove, so clear them
+				// and flush first -- otherwise whether this passes depends on the
+				// order Hibernate happens to delete the children in.
+				conversation.setLastMessage(null);
+				conversation.getParticipants().forEach(participant -> participant.setLastSeenMessage(null));
+				conversationRepo.saveAndFlush(conversation);
+				// cascade = ALL on participants and messages takes both with it.
+				conversationRepo.delete(conversation);
+			});
+			conversationRepo.flush();
+			createdUserIds.forEach(userRepository::deleteById);
+		});
+		createdUserIds.clear();
 	}
 
 	@Test

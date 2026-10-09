@@ -21,13 +21,16 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
-import com.wtsend.backend.services.interfaces.IOAuth2Service;
 
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-public class GoogleAuthService implements IOAuth2Service {
+// No interface, matching FacebookAuthService: the two providers verify in
+// genuinely different ways -- Google exchanges an authorization code, Facebook
+// inspects a token -- so a shared abstraction over them described nothing. The
+// old one existed with a single implementation and nobody injecting it.
+public class GoogleAuthService {
 
 	@Value("${spring.security.oauth2.client.registration.google.client-id}")
 	private String clientId;
@@ -57,7 +60,6 @@ public class GoogleAuthService implements IOAuth2Service {
 		return (String) tokenResponse.getAdditionalParameters().get("id_token");
 	}
 
-	@Override
 	public GoogleIdToken.Payload verify(String credential) {
 		try {
 			GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(

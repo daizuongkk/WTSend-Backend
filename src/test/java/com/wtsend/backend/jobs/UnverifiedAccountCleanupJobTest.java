@@ -3,7 +3,10 @@ package com.wtsend.backend.jobs;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +34,20 @@ class UnverifiedAccountCleanupJobTest {
 	@Autowired
 	private UserRepository userRepository;
 
+	private final List<String> createdUserIds = new ArrayList<>();
+
+	/**
+	 * Two of these tests assert a user SURVIVES the sweep, so they have to leave
+	 * it committed -- and then delete it themselves. Left in the dev database,
+	 * an unverified survivor turns into a deletion candidate once it is a day
+	 * old, which is how a previous run of this very test broke the next one.
+	 */
+	@AfterEach
+	void removeWhatThisTestCommitted() {
+		createdUserIds.forEach(userRepository::deleteById);
+		createdUserIds.clear();
+	}
+
 	/**
 	 * createdAt is set by auditing on persist, so the age has to be backdated
 	 * afterwards -- a save with a stale timestamp would just be overwritten.
@@ -42,7 +59,9 @@ class UnverifiedAccountCleanupJobTest {
 				.emailVerified(verified)
 				.build());
 		ReflectionTestUtils.setField(user, "createdAt", createdAt);
-		return userRepository.save(user).getId();
+		String id = userRepository.save(user).getId();
+		createdUserIds.add(id);
+		return id;
 	}
 
 	@Test

@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.request.UpdateUserRequest;
 import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.dto.response.UserSummaryResponse;
@@ -33,17 +32,6 @@ public class UserService implements IUserService {
 	private final UserUtils userMapper;
 
 	private final CloudinaryService cloudinary;
-
-	public UserResponse createUser(SignUpRequest request) {
-
-		if (userRepository.existsByEmail(request.getEmail())) {
-			throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
-		}
-
-		User createdUser = userMapper.toUser(request);
-
-		return userMapper.toUserResponse(userRepository.save(createdUser));
-	}
 
 	@Override
 	@Transactional(readOnly = true)

@@ -12,11 +12,7 @@ import com.wtsend.backend.model.User;
 
 public interface FriendRepository extends JpaRepository<Friend, Long> {
 
-	Optional<Friend> findByUserAIdAndUserBId(String from, String to);
-
 	boolean existsByUserAIdAndUserBId(String from, String to);
-
-	List<Friend> findByUserAIdOrUserBId(String from, String to);
 
 	@Query("""
 			    SELECT f FROM Friend f

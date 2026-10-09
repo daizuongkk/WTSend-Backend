@@ -11,6 +11,7 @@ import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.response.FriendResponse;
 import com.wtsend.backend.dto.response.Sender;
 import com.wtsend.backend.dto.response.UserResponse;
+import com.wtsend.backend.model.enums.AuthProvider;
 import com.wtsend.backend.model.User;
 
 import lombok.RequiredArgsConstructor;
@@ -51,7 +52,9 @@ public class UserUtils {
 	public User toUser(SignUpRequest request) {
 
 		return User.builder().password(passwordEncoder.encode(request.getPassword()))
-				.email(request.getEmail()).displayName(request.getEmail().split("@")[0]).build();
+				.email(request.getEmail()).displayName(request.getEmail().split("@")[0])
+				.authProvider(AuthProvider.LOCAL)
+				.build();
 	}
 
 	public UserResponse toUserResponse(User user) {
@@ -78,6 +81,7 @@ public class UserUtils {
 	public User facebookUserToEntity(FacebookUser facebookUser) {
 		return User.builder()
 				.username(providerUsername("fb_", facebookUser.id()))
+				.authProvider(AuthProvider.FACEBOOK)
 				.displayName(facebookUser.name())
 				.email(facebookUser.email())
 				.avatarUrl(facebookUser.pictureUrl())
@@ -90,6 +94,7 @@ public class UserUtils {
 	public User googleOAuth2PayloadToEntity(GoogleIdToken.Payload payload) {
 		return User.builder()
 				.username(providerUsername("google_", payload.getSubject()))
+				.authProvider(AuthProvider.GOOGLE)
 				.displayName(payload.get("name").toString())
 				.email(payload.getEmail())
 				.avatarUrl(payload.get("picture").toString())

@@ -19,7 +19,8 @@ public interface UserRepository extends JpaRepository<User, String> {
 	boolean existsByEmail(String email);
 
 	/**
-	 * Deletes registrations that were never verified and are past the cutoff.
+	 * Deletes registrations that were never verified, are past the cutoff, and own
+	 * nothing at all.
 	 *
 	 * <p>
 	 * One statement rather than read-then-delete, so two instances racing on the
@@ -31,6 +32,14 @@ public interface UserRepository extends JpaRepository<User, String> {
 	 * updatable -- see UserService.updateUser. Were it updatable, this query
 	 * would also match every established account that had just changed address.
 	 *
+	 * <p>
+	 * The NOT EXISTS clauses are not belt and braces. An unverified account
+	 * cannot own anything today, but only because SecurityConfig gates all of
+	 * /api/** behind EMAIL_VERIFIED -- the moment any endpoint is opened up, an
+	 * unconditional delete starts failing on a foreign key, inside a scheduled
+	 * job where the only symptom is a log line. They also state the intent
+	 * exactly: an account with data is not an abandoned registration.
+	 *
 	 * @return how many were removed
 	 */
 	@Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -38,6 +47,13 @@ public interface UserRepository extends JpaRepository<User, String> {
 			    DELETE FROM User u
 			    WHERE u.emailVerified = false
 			      AND u.createdAt < :cutoff
+			      AND NOT EXISTS (SELECT 1 FROM Message m WHERE m.sender = u)
+			      AND NOT EXISTS (SELECT 1 FROM Participant p WHERE p.user = u)
+			      AND NOT EXISTS (SELECT 1 FROM Friend f WHERE f.userA = u OR f.userB = u)
+			      AND NOT EXISTS (
+			        SELECT 1 FROM FriendRequest fr WHERE fr.fromUser = u OR fr.toUser = u
+			      )
+			      AND NOT EXISTS (SELECT 1 FROM GroupInfo g WHERE g.creator = u)
 			""")
 	int deleteUnverifiedRegisteredBefore(@Param("cutoff") Instant cutoff);
 
