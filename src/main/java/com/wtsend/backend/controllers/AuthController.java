@@ -34,7 +34,24 @@ public class AuthController {
 
 	@PostMapping("/refresh")
 	public ResponseEntity<AuthResponse> refreshToken(@CookieValue(name = RefreshTokenCookie.NAME, required = false) String req) {
-		var res = authService.refreshToken(req);
+		return withRefreshCookie(authService.refreshToken(req));
+	}
+
+	/**
+	 * Answers 200 and attaches the refresh cookie only when there is a token to
+	 * attach.
+	 *
+	 * <p>
+	 * An unverified account gets an access token and no refresh token, so this
+	 * guard is not cosmetic: {@code ResponseCookie.from(name, null)} rejects the
+	 * null value, which turned a perfectly ordinary provider sign-in by an
+	 * unverified account into a 500. /login had the guard and the other three
+	 * endpoints did not.
+	 */
+	private static ResponseEntity<AuthResponse> withRefreshCookie(AuthResponse res) {
+		if (res.getRefreshToken() == null)
+			return ResponseEntity.ok(res);
+
 		return ResponseEntity.ok()
 				.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
 				.body(res);
@@ -42,10 +59,7 @@ public class AuthController {
 
 	@PostMapping("/google")
 	public ResponseEntity<AuthResponse> googleAuth(@RequestBody @Valid GoogleAuthRequest request) {
-		AuthResponse res = authService.googleLogin(request.getCode());
-		return ResponseEntity.ok()
-				.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
-				.body(res);
+		return withRefreshCookie(authService.googleLogin(request.getCode()));
 	}
 
 	/**
@@ -56,10 +70,7 @@ public class AuthController {
 	 */
 	@PostMapping("/facebook")
 	public ResponseEntity<AuthResponse> facebookAuth(@RequestBody @Valid FacebookAuthRequest request) {
-		AuthResponse res = authService.facebookLogin(request);
-		return ResponseEntity.ok()
-				.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
-				.body(res);
+		return withRefreshCookie(authService.facebookLogin(request));
 	}
 
 	@PostMapping("/register")
@@ -70,15 +81,7 @@ public class AuthController {
 
 	@PostMapping("/login")
 	public ResponseEntity<AuthResponse> signIn(@RequestBody @Valid SignInRequest request) {
-		AuthResponse res = authService.signIn(request);
-
-		if (res.getRefreshToken() != null) {
-			return ResponseEntity.ok()
-					.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
-					.body(res);
-		}
-
-		return ResponseEntity.ok(res);
+		return withRefreshCookie(authService.signIn(request));
 	}
 
 	/**
