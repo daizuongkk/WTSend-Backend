@@ -3,6 +3,7 @@ package com.wtsend.backend.common.exception;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+
+import com.wtsend.backend.configs.security.AuthRateLimit;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -24,6 +27,24 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(AppException.class)
 	public ResponseEntity<ErrorResponse> handleAppException(AppException ex, HttpServletRequest request) {
 		return respond(ex.getErrorCode(), request, ex, ex.getDetail());
+	}
+
+	/**
+	 * The one error that carries a header. Retry-After is the only way the
+	 * client can tell a wait from a refusal, and the body is the ordinary
+	 * ErrorResponse so nothing has to special-case the shape.
+	 */
+	@ExceptionHandler(AuthRateLimit.RateLimitedException.class)
+	public ResponseEntity<ErrorResponse> handleRateLimited(AuthRateLimit.RateLimitedException ex,
+			HttpServletRequest request) {
+		// Through respond() so the logging and the body stay in one place; only the
+		// header is added on top.
+		ResponseEntity<ErrorResponse> response = respond(ErrorCode.TOO_MANY_REQUESTS, request, ex,
+				"retryAfter=" + ex.getRetryAfterSeconds());
+
+		return ResponseEntity.status(response.getStatusCode())
+				.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+				.body(response.getBody());
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

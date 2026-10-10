@@ -19,9 +19,11 @@ import com.wtsend.backend.dto.request.SignInRequest;
 import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.response.AuthResponse;
 import com.wtsend.backend.dto.response.UserResponse;
+import com.wtsend.backend.configs.security.AuthRateLimit;
 import com.wtsend.backend.libs.RefreshTokenCookie;
 import com.wtsend.backend.services.interfaces.IAuthService;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -31,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 public class AuthController {
 
 	private final IAuthService authService;
+	private final AuthRateLimit rateLimit;
 
 	@PostMapping("/refresh")
 	public ResponseEntity<AuthResponse> refreshToken(@CookieValue(name = RefreshTokenCookie.NAME, required = false) String req) {
@@ -79,9 +82,36 @@ public class AuthController {
 		return ResponseEntity.status(HttpStatus.CREATED).body(res);
 	}
 
+	/**
+	 * Rate limited here rather than in a filter, because the limit is keyed on
+	 * the email as well as the IP and the body has already been parsed by the
+	 * time this runs -- a filter would have to read and re-buffer the request
+	 * stream to see it.
+	 *
+	 * <p>
+	 * A success clears the counter for that address, so what it really limits is
+	 * consecutive failures. The IP counter is not cleared.
+	 */
 	@PostMapping("/login")
-	public ResponseEntity<AuthResponse> signIn(@RequestBody @Valid SignInRequest request) {
-		return withRefreshCookie(authService.signIn(request));
+	public ResponseEntity<AuthResponse> signIn(@RequestBody @Valid SignInRequest request,
+			HttpServletRequest http) {
+		rateLimit.login(clientAddress(http), request.getEmail());
+
+		AuthResponse res = authService.signIn(request);
+		rateLimit.loginSucceeded(request.getEmail());
+
+		return withRefreshCookie(res);
+	}
+
+	/**
+	 * {@code getRemoteAddr}, not {@code X-Forwarded-For}. Nothing here is
+	 * configured as being behind a trusted proxy, so honouring that header would
+	 * let anyone reset their own IP counter by sending a different value --
+	 * which is to say, would make the limit decorative. Behind a real proxy this
+	 * needs {@code server.forward-headers-strategy} and nothing else.
+	 */
+	private static String clientAddress(HttpServletRequest request) {
+		return request.getRemoteAddr();
 	}
 
 	/**
@@ -91,7 +121,13 @@ public class AuthController {
 	 * saying so was enough to tell anyone which addresses are registered.
 	 */
 	@PostMapping("/forgot-password")
-	public ResponseEntity<Map<String, String>> forgotPassword(@RequestBody @Valid ForgotPasswordRequest request) {
+	public ResponseEntity<Map<String, String>> forgotPassword(@RequestBody @Valid ForgotPasswordRequest request,
+			HttpServletRequest http) {
+		// The one endpoint where a stranger can make this app send mail, and it
+		// answers the same way for every address -- so without a counter it is
+		// also a free way to post mail to anyone.
+		rateLimit.passwordReset(clientAddress(http), request.getEmail());
+
 		authService.forgotPassword(request);
 		return ResponseEntity.ok(Map.of("message",
 				"Nếu địa chỉ này có tài khoản, chúng tôi đã gửi email đặt lại mật khẩu."));

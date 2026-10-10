@@ -27,6 +27,7 @@ public enum ErrorCode {
 	UNCATEGORIZED(1000, HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error"),
 	INVALID_REQUEST(1001, HttpStatus.BAD_REQUEST, "Invalid request"),
 	MALFORMED_REQUEST(1002, HttpStatus.BAD_REQUEST, "Malformed request"),
+	TOO_MANY_REQUESTS(1003, HttpStatus.TOO_MANY_REQUESTS, "Too many attempts. Please try again later."),
 
 	// --- 1100-1199 validation ---------------------------------------------
 	VALIDATION_FAILED(1100, HttpStatus.BAD_REQUEST, "Validation failed"),
