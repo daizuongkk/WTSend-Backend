@@ -73,10 +73,7 @@ public class UserService implements IUserService {
     // avatar change left an asset behind in Cloudinary forever.
     String replacedAvatarId = user.getAvatarId();
 
-    Map<?, ?> result = cloudinary.upload(file);
-
-    user.setAvatarUrl(result.get("secure_url").toString());
-    user.setAvatarId(result.get("public_id").toString());
+    applyUploadedAvatar(user, file);
     userRepository.save(user);
 
     // Only once the replacement is stored, and never fatally -- see
@@ -85,6 +82,40 @@ public class UserService implements IUserService {
 
     return user.getAvatarUrl();
 
+  }
+
+  /**
+   * Uploads the file and writes the result onto the user that is handed in --
+   * without saving, and without destroying anything.
+   *
+   * <p>
+   * Both of those are the caller's job, and that split is the whole point.
+   * {@code updateUser} used to call {@code uploadAvatar}, which loaded a SECOND
+   * instance of the same row, saved the new avatar onto it, and destroyed the
+   * replaced asset; control then returned and {@code updateUser} saved its own
+   * detached copy -- still carrying the pre-upload values -- over the top. The
+   * row ended up pointing at an asset that had just been deleted, so the avatar
+   * was broken for good, and the newly uploaded one was orphaned. On a first
+   * upload it was worse: nothing to destroy, but the row reverted to NULL, so
+   * the avatar silently never saved at all.
+   */
+  private void applyUploadedAvatar(User user, MultipartFile file) {
+    Map<?, ?> result = cloudinary.upload(file);
+    user.setAvatarUrl(requiredUploadField(result, "secure_url"));
+    user.setAvatarId(requiredUploadField(result, "public_id"));
+  }
+
+  /**
+   * A successful upload whose response is missing a field used to NPE here,
+   * which surfaced as a 500 with the asset already uploaded and billed and
+   * nothing recorded -- so it could never be destroyed either.
+   */
+  private static String requiredUploadField(Map<?, ?> result, String key) {
+    Object value = result.get(key);
+    if (value == null)
+      throw new AppException(ErrorCode.FILE_UPLOAD_FAILED)
+          .withDetail("Cloudinary response has no " + key);
+    return value.toString();
   }
 
   @Override
@@ -126,17 +157,26 @@ public class UserService implements IUserService {
     if (visibilityChanged)
       existUser.setShowOnlineStatus(request.getShowOnlineStatus());
 
+    // Written onto the instance this method is about to save, not onto a second
+    // one loaded elsewhere -- see applyUploadedAvatar for what that cost.
+    String replacedAvatarId = null;
     if (request.getAvatar() != null) {
-      uploadAvatar(request.getAvatar(), existUser.getId());
+      replacedAvatarId = existUser.getAvatarId();
+      applyUploadedAvatar(existUser, request.getAvatar());
     }
+
     userRepository.save(existUser);
 
+    // Destroyed only once the replacement is durable: if the save had failed
+    // after the destroy, the row would point at an asset that no longer exists.
+    // Null-safe, so a first-ever upload passes straight through.
+    cloudinary.destroyQuietly(replacedAvatarId);
+
     // After the save, not before. This method is deliberately not
-    // @Transactional -- uploadAvatar above makes two Cloudinary round trips,
-    // and a transaction here would hold a pooled database connection for the
-    // whole of them. So there is no commit for the listener to hang off, and
-    // it runs with fallbackExecution: publishing after the save is what puts
-    // it on the right side of the write.
+    // @Transactional -- the Cloudinary round trips above would otherwise hold a
+    // pooled database connection for their whole duration. So there is no
+    // commit for the listener to hang off, and it runs with fallbackExecution:
+    // publishing after the save is what puts it on the right side of the write.
     if (visibilityChanged)
       eventPublisher.publishEvent(
           new OnlineVisibilityChangedEvent(existUser.getId(), existUser.isShowOnlineStatus()));
