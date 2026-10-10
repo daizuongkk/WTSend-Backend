@@ -62,7 +62,14 @@ public class SecurityConfig {
 						.requestMatchers("/api/send-verify-email").hasAuthority("EMAIL_NOT_VERIFIED")
 						.requestMatchers("/api/**").hasAuthority("EMAIL_VERIFIED")
 						.anyRequest().authenticated())
-				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+				// STATELESS, not IF_REQUIRED. Auth here is a bearer token and nothing
+				// reads an HttpSession -- oauth2-client is used only to exchange a
+				// Google authorization code server-side, never for a browser login
+				// flow. With IF_REQUIRED, the request cache allocates a session while
+				// translating an unauthenticated request into a 401, so anonymous
+				// traffic could accumulate sessions nobody ever comes back for. It is
+				// also the premise csrf.disable() below rests on.
+				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
 				// Security rejects requests inside the filter chain, before any
 				// @RestControllerAdvice runs. Without both halves wired, a 401 fell back

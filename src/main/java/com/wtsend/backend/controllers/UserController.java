@@ -35,53 +35,54 @@ import lombok.RequiredArgsConstructor;
 @Validated
 @RequiredArgsConstructor
 public class UserController {
-	private final IUserService userService;
-	private final IAuthService authService;
+  private final IUserService userService;
+  private final IAuthService authService;
 
-	@GetMapping("/me")
-	public ResponseEntity<UserResponse> me(@AuthenticationPrincipal Jwt jwt) {
-		return ResponseEntity.ok(userService.me(jwt.getSubject()));
-	}
+  @GetMapping("/me")
+  public ResponseEntity<UserResponse> me(@AuthenticationPrincipal Jwt jwt) {
+    return ResponseEntity.ok(userService.findById(jwt.getSubject()));
+  }
 
-	@GetMapping("/search")
-	public ResponseEntity<UserSummaryResponse> searchUserByUsername(@RequestParam(name = "username") @NotBlank(message = "Username is required") String username) {
-		return ResponseEntity.ok(userService.findByUsername(username));
-	}
+  @GetMapping("/search")
+  public ResponseEntity<UserSummaryResponse> searchUserByUsername(
+      @RequestParam(name = "username") @NotBlank(message = "Username is required") String username) {
+    return ResponseEntity.ok(userService.findByUsername(username));
+  }
 
-	/**
-	 * Uploads an avatar on its own. The web client does not use this -- it sends
-	 * the file inside {@code PUT /api/users} -- but a non-web client does, so it
-	 * is not dead code despite having no caller in this repository.
-	 */
-	@PostMapping("/upload")
-	public ResponseEntity<Map<String, String>> uploadAvatar(@RequestParam(name = "img") MultipartFile file,
-			@AuthenticationPrincipal Jwt jwt) {
-		String imgUrl = userService.uploadAvatar(file, jwt.getSubject());
+  /**
+   * Uploads an avatar on its own. The web client does not use this -- it sends
+   * the file inside {@code PUT /api/users} -- but a non-web client does, so it
+   * is not dead code despite having no caller in this repository.
+   */
+  @PostMapping("/upload")
+  public ResponseEntity<Map<String, String>> uploadAvatar(@RequestParam(name = "img") MultipartFile file,
+      @AuthenticationPrincipal Jwt jwt) {
+    String imgUrl = userService.uploadAvatar(file, jwt.getSubject());
 
-		return ResponseEntity.ok(Map.of("avatarUrl", imgUrl));
-	}
+    return ResponseEntity.ok(Map.of("avatarUrl", imgUrl));
+  }
 
-	@PutMapping("/password")
-	/**
-	 * Returns a new token pair rather than 204. Changing the password revokes
-	 * every refresh token, including this device's, so a 204 left the client
-	 * working until its access token expired and then dropped it at the login
-	 * screen with no explanation.
-	 */
-	public ResponseEntity<AuthResponse> changePassword(@RequestBody @Valid ChangePasswordRequest request,
-			@AuthenticationPrincipal Jwt jwt) {
+  @PutMapping("/password")
+  /**
+   * Returns a new token pair rather than 204. Changing the password revokes
+   * every refresh token, including this device's, so a 204 left the client
+   * working until its access token expired and then dropped it at the login
+   * screen with no explanation.
+   */
+  public ResponseEntity<AuthResponse> changePassword(@RequestBody @Valid ChangePasswordRequest request,
+      @AuthenticationPrincipal Jwt jwt) {
 
-		AuthResponse res = authService.changePassword(request, jwt.getSubject());
-		return ResponseEntity.ok()
-				.header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
-				.body(res);
-	}
+    AuthResponse res = authService.changePassword(request, jwt.getSubject());
+    return ResponseEntity.ok()
+        .header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
+        .body(res);
+  }
 
-	@PutMapping("")
-	public ResponseEntity<UserResponse> updateUser(@ModelAttribute @Valid UpdateUserRequest request,
-			@AuthenticationPrincipal Jwt jwt) {
+  @PutMapping("")
+  public ResponseEntity<UserResponse> updateUser(@ModelAttribute @Valid UpdateUserRequest request,
+      @AuthenticationPrincipal Jwt jwt) {
 
-		return ResponseEntity.ok(userService.updateUser(request, jwt.getSubject()));
-	}
+    return ResponseEntity.ok(userService.updateUser(request, jwt.getSubject()));
+  }
 
 }

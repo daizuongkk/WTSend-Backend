@@ -7,14 +7,13 @@ import com.wtsend.backend.dto.response.UserResponse;
 import com.wtsend.backend.dto.response.UserSummaryResponse;
 
 public interface IUserService {
-	UserResponse me(String userId);
 
-	UserResponse findById(String id);
+  UserResponse findById(String id);
 
-	UserSummaryResponse findByUsername(String username);
+  UserSummaryResponse findByUsername(String username);
 
-	String uploadAvatar(MultipartFile file, String userId);
+  String uploadAvatar(MultipartFile file, String userId);
 
-	UserResponse updateUser(UpdateUserRequest request, String userId);
+  UserResponse updateUser(UpdateUserRequest request, String userId);
 
 }
