@@ -28,7 +28,6 @@ import com.wtsend.backend.dto.request.ResetPasswordRequest;
 import com.wtsend.backend.event.PasswordResetRequestedEvent;
 import com.wtsend.backend.event.VerificationEmailRequestedEvent;
 import com.wtsend.backend.model.User;
-import com.wtsend.backend.repository.RefreshTokenRepository;
 import com.wtsend.backend.repository.UserRepository;
 
 /**
@@ -46,7 +45,7 @@ class PasswordResetTest {
 	@Mock
 	private UserRepository userRepository;
 	@Mock
-	private RefreshTokenRepository refreshTokenRepo;
+	private RefreshTokenService refreshTokenService;
 	@Mock
 	private PasswordEncoder passwordEncoder;
 	@Mock
@@ -143,7 +142,7 @@ class PasswordResetTest {
 		verify(userRepository).save(existing);
 		// A reset is what someone does when they think the account is compromised,
 		// so a session holding an older refresh token must not survive it.
-		verify(refreshTokenRepo).deleteByUserId(USER_ID);
+		verify(refreshTokenService).revokeEverythingIssuedBefore(USER_ID);
 	}
 
 	@Test
@@ -157,6 +156,6 @@ class PasswordResetTest {
 				.isEqualTo(ErrorCode.PASSWORD_RESET_TOKEN_INVALID);
 
 		verify(userRepository, never()).save(any());
-		verify(refreshTokenRepo, never()).deleteByUserId(any());
+		verify(refreshTokenService, never()).revokeEverythingIssuedBefore(any());
 	}
 }

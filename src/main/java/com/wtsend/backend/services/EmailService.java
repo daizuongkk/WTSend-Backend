@@ -85,7 +85,7 @@ public class EmailService implements IEmailService {
 				.email(user.getEmail())
 				.emailVerified(true)
 				.accessToken(jwtService.generateToken(user))
-				.refreshToken(refreshTokenService.create(user).getToken()).build();
+				.refreshToken(refreshTokenService.create(user).token()).build();
 	}
 
 	@Override

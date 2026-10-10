@@ -7,6 +7,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -25,9 +30,11 @@ import com.nimbusds.jose.proc.SecurityContext;
 public class JwtConfig {
 
 	private final RsaKeyConfig rsaKey;
+	private final PasswordChangeCutoff passwordChangeCutoff;
 
-	JwtConfig(RsaKeyConfig rsaKey) {
+	JwtConfig(RsaKeyConfig rsaKey, PasswordChangeCutoff passwordChangeCutoff) {
 		this.rsaKey = rsaKey;
+		this.passwordChangeCutoff = passwordChangeCutoff;
 	}
 
 	@Bean
@@ -37,9 +44,36 @@ public class JwtConfig {
 		return new NimbusJwtEncoder(jwks);
 	}
 
+	/**
+	 * Validates the signature and timestamps as before, and additionally rejects
+	 * a token minted before its owner's last password change.
+	 *
+	 * <p>
+	 * Without that last check, changing or resetting a password revoked only the
+	 * refresh tokens. Access tokens are stateless and were accepted on signature
+	 * and expiry alone, so whoever held a stolen one kept reading and writing for
+	 * up to the full five minutes after the victim had already changed their
+	 * password -- and changePassword made it worse by handing the caller a fresh
+	 * pair while the attacker's old token also stayed live.
+	 *
+	 * <p>
+	 * The cost, chosen deliberately: one Redis read per authenticated request.
+	 */
 	@Bean
 	public JwtDecoder jwtDecoder() {
-		return NimbusJwtDecoder.withPublicKey(rsaKey.getPublicKey()).build();
+		NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(rsaKey.getPublicKey()).build();
+		decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+				JwtValidators.createDefault(),
+				this::notIssuedBeforeAPasswordChange));
+		return decoder;
+	}
+
+	private OAuth2TokenValidatorResult notIssuedBeforeAPasswordChange(Jwt jwt) {
+		if (passwordChangeCutoff.stillValid(jwt.getSubject(), jwt.getIssuedAt()))
+			return OAuth2TokenValidatorResult.success();
+
+		return OAuth2TokenValidatorResult.failure(new OAuth2Error(
+				"invalid_token", "Token was issued before the password changed", null));
 	}
 
 	@Bean

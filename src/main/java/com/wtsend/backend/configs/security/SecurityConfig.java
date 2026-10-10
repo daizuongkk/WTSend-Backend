@@ -42,10 +42,7 @@ public class SecurityConfig {
 			"/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/error",
 			"/api/auth/google", "/api/auth/facebook", "/api/verify-email",
 			// Both are for someone who cannot sign in, so neither can require auth.
-			"/api/auth/forgot-password", "/api/auth/reset-password",
-			// Logout only needs the refresh cookie. Gating it on EMAIL_VERIFIED left
-			// unverified users -- who do get an access token -- unable to log out.
-			"/api/auth/logout"
+			"/api/auth/forgot-password", "/api/auth/reset-password"
 
 	};
 
@@ -59,6 +56,14 @@ public class SecurityConfig {
 						// Readable by an account that has not verified yet: the client needs
 						// to know whether it has.
 						.requestMatchers("/api/users/me").authenticated()
+						// Authenticated, not public, and NOT EMAIL_VERIFIED. Public let any
+						// site force a logout: the cookie is SameSite=None and CSRF is off,
+						// so a page on another origin could POST here with credentials and
+						// delete the server-side refresh record -- it cannot read the
+						// response, but the victim is signed out of every tab regardless.
+						// EMAIL_VERIFIED would be wrong in the other direction: unverified
+						// users do get an access token and must still be able to log out.
+						.requestMatchers("/api/auth/logout").authenticated()
 						.requestMatchers("/api/send-verify-email").hasAuthority("EMAIL_NOT_VERIFIED")
 						.requestMatchers("/api/**").hasAuthority("EMAIL_VERIFIED")
 						.anyRequest().authenticated())

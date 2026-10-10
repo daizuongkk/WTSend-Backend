@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.wtsend.backend.dto.RefreshToken;
 import com.wtsend.backend.dto.request.ChangePasswordRequest;
 import com.wtsend.backend.dto.FacebookUser;
 import com.wtsend.backend.dto.request.FacebookAuthRequest;
@@ -25,7 +24,6 @@ import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.utils.UserUtils;
 import com.wtsend.backend.model.User;
-import com.wtsend.backend.repository.RefreshTokenRepository;
 import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IAuthService;
 
@@ -41,7 +39,6 @@ public class AuthService implements IAuthService {
 	private final AuthenticationManager authenticationManager;
 	private final JwtService jwtService;
 	private final RefreshTokenService refreshTokenService;
-	private final RefreshTokenRepository refreshTokenRepo;
 	private final UserUtils userMapper;
 	private final PasswordEncoder passwordEncoder;
 	private final GoogleAuthService googleAuthService;
@@ -66,9 +63,9 @@ public class AuthService implements IAuthService {
 					.email(user.getEmail()).build();
 		}
 
-		RefreshToken newRefreshToken = refreshTokenService.create(user);
+		var newRefreshToken = refreshTokenService.create(user);
 		return AuthResponse.builder().emailVerified(user.isEmailVerified()).accessToken(jwtService.generateToken(user))
-				.refreshToken(newRefreshToken.getToken())
+				.refreshToken(newRefreshToken.token())
 				.build();
 	}
 
@@ -82,7 +79,7 @@ public class AuthService implements IAuthService {
 
 		return AuthResponse.builder()
 				.accessToken(jwtService.generateToken(user))
-				.refreshToken(refreshTokenService.create(user).getToken())
+				.refreshToken(refreshTokenService.create(user).token())
 				.build();
 	}
 
@@ -107,7 +104,7 @@ public class AuthService implements IAuthService {
 				.email(user.getEmail())
 				.emailVerified(user.isEmailVerified())
 				.accessToken(jwtService.generateToken(user))
-				.refreshToken(refreshTokenService.create(user).getToken())
+				.refreshToken(refreshTokenService.create(user).token())
 				.build();
 	}
 
@@ -164,14 +161,17 @@ public class AuthService implements IAuthService {
 
 	public AuthResponse refreshToken(String token) {
 
-		User user = refreshTokenService.verify(token);
-		refreshTokenService.revoke(token);
-
-		RefreshToken newRfToken = refreshTokenService.create(user);
+		// One operation, not verify-then-revoke: two concurrent calls with the
+		// same cookie both used to read the record before either delete landed,
+		// and one token became two live chains. A replay now revokes the whole
+		// family and then fails like any invalid token.
+		var rotated = refreshTokenService.rotate(token);
+		User user = rotated.user();
+		var newRfToken = rotated.refreshToken();
 
 		String newAccessToken = jwtService.generateToken(user);
 		return AuthResponse.builder()
-				.refreshToken(newRfToken.getToken())
+				.refreshToken(newRfToken.token())
 				.accessToken(newAccessToken)
 				.build();
 	}
@@ -230,7 +230,11 @@ public class AuthService implements IAuthService {
 		user.setPassword(passwordEncoder.encode(request.getNewPassword()));
 		userRepository.save(user);
 
-		refreshTokenRepo.deleteByUserId(user.getId());
+		// Kills every credential issued before now, refresh AND access: access
+		// tokens are stateless, so JwtConfig checks this same marker. Enumerating
+		// refresh tokens could never reach the access tokens already out there,
+		// which stayed valid for up to their full five minutes.
+		refreshTokenService.revokeEverythingIssuedBefore(user.getId());
 	}
 
 	@Override
@@ -253,7 +257,7 @@ public class AuthService implements IAuthService {
 		userRepository.save(user);
 
 		// Any session still holding an old refresh token must not survive.
-		refreshTokenRepo.deleteByUserId(userId);
+		refreshTokenService.revokeEverythingIssuedBefore(userId);
 
 		// Except this one. The caller just proved they know the current password, so
 		// logging them out of the device they are using would be a worse outcome than
@@ -263,7 +267,7 @@ public class AuthService implements IAuthService {
 				.email(user.getEmail())
 				.emailVerified(user.isEmailVerified())
 				.accessToken(jwtService.generateToken(user))
-				.refreshToken(refreshTokenService.create(user).getToken())
+				.refreshToken(refreshTokenService.create(user).token())
 				.build();
 	}
 

@@ -20,11 +20,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
-import com.wtsend.backend.dto.RefreshToken;
 import com.wtsend.backend.dto.request.ChangePasswordRequest;
 import com.wtsend.backend.dto.response.AuthResponse;
 import com.wtsend.backend.model.User;
-import com.wtsend.backend.repository.RefreshTokenRepository;
 import com.wtsend.backend.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,8 +33,6 @@ class ChangePasswordTest {
 
 	@Mock
 	private UserRepository userRepository;
-	@Mock
-	private RefreshTokenRepository refreshTokenRepo;
 	@Mock
 	private RefreshTokenService refreshTokenService;
 	@Mock
@@ -73,11 +69,13 @@ class ChangePasswordTest {
 		when(passwordEncoder.encode("NewPass1!")).thenReturn("{bcrypt}new");
 		when(jwtService.generateToken(user)).thenReturn("access-token");
 		when(refreshTokenService.create(user))
-				.thenReturn(RefreshToken.builder().token("refresh-token").userId(USER_ID).build());
+				.thenReturn(new RefreshTokenService.IssuedRefreshToken("refresh-token", "family-1"));
 
 		AuthResponse res = authService.changePassword(request("Current1!", "NewPass1!"), USER_ID);
 
-		verify(refreshTokenRepo).deleteByUserId(USER_ID);
+		// One marker instead of enumerating refresh tokens -- it also invalidates
+		// the access tokens already out there, which the old delete could not.
+		verify(refreshTokenService).revokeEverythingIssuedBefore(USER_ID);
 		assertThat(res.getAccessToken()).isEqualTo("access-token");
 		assertThat(res.getRefreshToken()).isEqualTo("refresh-token");
 		assertThat(user.getPassword()).isEqualTo("{bcrypt}new");
@@ -94,7 +92,7 @@ class ChangePasswordTest {
 				.isEqualTo(ErrorCode.WRONG_CURRENT_PASSWORD);
 
 		verify(userRepository, never()).save(any());
-		verify(refreshTokenRepo, never()).deleteByUserId(any());
+		verify(refreshTokenService, never()).revokeEverythingIssuedBefore(any());
 	}
 
 	@Test
