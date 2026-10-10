@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -24,9 +25,16 @@ public class SendGroupMessageRequest {
 	@NotNull(message = "Conversation Id is required")
 	private Long conversationId;
 
+	/**
+	 * Bounded by messages.content, a MySQL TEXT: 65,535 bytes, which under
+	 * utf8mb4 is as few as 16,383 characters. Past that the insert failed with a
+	 * 500 rather than a 400.
+	 */
+	@Size(max = 16000, message = "content is too long")
 	private String content;
 
-	/** Cloudinary URL of an attached image. Named to match {@code Message.imgUrl}. */
+	/** Cloudinary URL of an attached image. Named to match {@code Message.imgUrl}, and bounded by its column. */
+	@Size(max = 255, message = "imgUrl must be at most 255 characters")
 	private String imgUrl;
 
 	/**

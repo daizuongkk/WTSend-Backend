@@ -67,19 +67,37 @@ public class ConversationService implements IConversationService {
 	public ConversationResponse createConversation(CreateConversationRequest request, String userId) {
 		ConversationType type = request.getType();
 		String name = request.getName();
-		List<String> memberIds = request.getMemberIds();
+		// The same id twice would build two Participant rows for one user and fail
+		// on uk_participants_conversation_user.
+		List<String> memberIds = request.getMemberIds().stream().distinct().toList();
+
+		if (type == ConversationType.DIRECT && memberIds.size() > 1)
+			throw new AppException(ErrorCode.CONVERSATION_INVALID_TYPE)
+					.withDetail("DIRECT with " + memberIds.size() + " members");
 
 		User user = userRepository.findById(userId)
 				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + userId));
 
-		// One query for the whole member list rather than one per member.
+		// One query for the whole member list rather than one per member. Note it
+		// cannot stand in for the existence check below: an id that matches no row
+		// produces no stranger, so it used to pass straight through here.
 		List<User> strangers = friendRepo.findNonFriendsAmong(userId, memberIds);
 		if (!strangers.isEmpty())
 			throw new AppException(ErrorCode.CANNOT_CONVERSE_WITH_STRANGER)
 					.withDetail("memberIds=" + strangers.stream().map(User::getId).toList());
 
-		Conversation conversation = type.equals(ConversationType.DIRECT) ? createDirectConversation(user, memberIds)
-				: createGroupConversation(user, memberIds, name);
+		List<User> members = userRepository.findAllById(memberIds);
+		if (members.size() != memberIds.size()) {
+			List<String> found = members.stream().map(User::getId).toList();
+			// findAllById drops what it cannot find, so a group was created missing
+			// the member nobody was told about -- and a DIRECT id nobody owned threw
+			// USER_NOT_FOUND only because of a second lookup further down.
+			throw new AppException(ErrorCode.USER_NOT_FOUND)
+					.withDetail("memberIds not found=" + memberIds.stream().filter(id -> !found.contains(id)).toList());
+		}
+
+		Conversation conversation = type.equals(ConversationType.DIRECT) ? createDirectConversation(user, members)
+				: createGroupConversation(user, members, name);
 		conversationRepo.save(conversation);
 
 		ConversationResponse response = conversationMapper.toResponse(conversation);
@@ -160,27 +178,24 @@ public class ConversationService implements IConversationService {
 				.build();
 	}
 
-	private Conversation createDirectConversation(User user, List<String> memberIds) {
-		String participantId = memberIds.get(0);
+	/** Members arrive already loaded and already checked for existence. */
+	private Conversation createDirectConversation(User user, List<User> members) {
+		User participant = members.get(0);
 
-		if (participantId.equals(user.getId())) {
+		if (participant.getId().equals(user.getId())) {
 			throw new AppException(ErrorCode.CANNOT_CONVERSE_WITH_SELF);
 		}
 
-		User participant = userRepository.findById(participantId)
-				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + participantId));
-
 		return conversationRepo
-				.findByDirectKey(Conversation.directKeyOf(user.getId(), participantId))
+				.findByDirectKey(Conversation.directKeyOf(user.getId(), participant.getId()))
 				.orElseGet(() -> createNewDirectConversation(user, participant));
 	}
 
-	private Conversation createGroupConversation(User user, List<String> memberIds, String name) {
+	private Conversation createGroupConversation(User user, List<User> users, String name) {
 
 		if (name == null || name.isBlank()) {
 			name = "Nhóm của " + user.getDisplayName().split(" ")[0];
 		}
-		List<User> users = userRepository.findAllById(memberIds);
 
 		List<Participant> participants = new ArrayList<>();
 		Conversation conversation = new Conversation();

@@ -80,12 +80,19 @@ class ConversationQueryCountTest {
 		return user;
 	}
 
-	private void persistGroupConversation(User owner, User other, String name) {
+	private Conversation persistGroupConversation(User owner, User other, String name) {
+		return persistGroupConversation(owner, List.of(other), name);
+	}
+
+	private Conversation persistGroupConversation(User owner, List<User> others, String name) {
 		Conversation conversation = new Conversation();
 		conversation.setType(ConversationType.GROUP);
 
+		List<User> members = new ArrayList<>(others);
+		members.add(owner);
+
 		List<Participant> participants = new ArrayList<>();
-		for (User member : List.of(owner, other)) {
+		for (User member : members) {
 			Participant participant = new Participant();
 			participant.setUser(member);
 			participant.setConversation(conversation);
@@ -100,6 +107,43 @@ class ConversationQueryCountTest {
 				.build());
 
 		entityManager.persist(conversation);
+		return conversation;
+	}
+
+	/**
+	 * The load that precedes a send, counted the same way.
+	 *
+	 * <p>
+	 * {@code MessageHelper.checkMembership} walks the participants and their
+	 * users, so a plain {@code findById} here cost one query for the collection
+	 * and one per member on top.
+	 */
+	private long queriesToCheckMembership(Long conversationId) {
+		entityManager.flush();
+		entityManager.clear();
+		statistics.clear();
+
+		Conversation conversation = conversationRepo.findByIdWithGraph(conversationId).orElseThrow();
+		conversation.getParticipants().forEach(participant -> participant.getUser().getId());
+
+		return statistics.getPrepareStatementCount();
+	}
+
+	@Test
+	void theMembershipCheckBeforeASendCostsOneQueryWhateverTheMemberCount() {
+		User alice = persistUser("alice-send@example.com");
+
+		List<User> others = new ArrayList<>();
+		for (int i = 0; i < 2; i++)
+			others.add(persistUser("small-send-" + i + "@example.com"));
+		Long small = persistGroupConversation(alice, others, "small").getId();
+
+		for (int i = 0; i < 6; i++)
+			others.add(persistUser("big-send-" + i + "@example.com"));
+		Long big = persistGroupConversation(alice, others, "big").getId();
+
+		assertThat(queriesToCheckMembership(small)).isEqualTo(1);
+		assertThat(queriesToCheckMembership(big)).isEqualTo(1);
 	}
 
 	/** Loads the list and maps it exactly as the service does, then counts. */

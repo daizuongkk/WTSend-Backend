@@ -146,7 +146,7 @@ class MessageServiceTest {
 		when(friendRepo.existsFriendship(MALLORY, BOB)).thenReturn(true);
 		when(userRepository.findById(BOB)).thenReturn(Optional.of(bob));
 		when(userRepository.findById(MALLORY)).thenReturn(Optional.of(mallory));
-		when(conversationRepo.findById(CONVO_ID)).thenReturn(Optional.of(directConversationOf(alice, bob)));
+		when(conversationRepo.findByIdWithGraph(CONVO_ID)).thenReturn(Optional.of(directConversationOf(alice, bob)));
 
 		SendDirectMessageRequest request = directRequest(BOB, CONVO_ID, "injected");
 
@@ -164,7 +164,7 @@ class MessageServiceTest {
 		when(friendRepo.existsFriendship(ALICE, BOB)).thenReturn(true);
 		when(userRepository.findById(BOB)).thenReturn(Optional.of(bob));
 		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
-		when(conversationRepo.findById(CONVO_ID)).thenReturn(Optional.of(directConversationOf(alice, bob)));
+		when(conversationRepo.findByIdWithGraph(CONVO_ID)).thenReturn(Optional.of(directConversationOf(alice, bob)));
 		when(conversationMapper.toResponse(any())).thenReturn(new com.wtsend.backend.dto.response.ConversationResponse());
 		when(messageMapper.toResponse(any())).thenReturn(new MessageResponse());
 
@@ -226,7 +226,7 @@ class MessageServiceTest {
 		when(friendRepo.existsFriendship(ALICE, BOB)).thenReturn(true);
 		when(userRepository.findById(BOB)).thenReturn(Optional.of(bob));
 		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
-		when(conversationRepo.findById(CONVO_ID)).thenReturn(Optional.empty());
+		when(conversationRepo.findByIdWithGraph(CONVO_ID)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> messageService.sendDirectMessage(directRequest(BOB, CONVO_ID, "hi"), ALICE))
 				.isInstanceOf(AppException.class)
@@ -244,7 +244,7 @@ class MessageServiceTest {
 		when(friendRepo.existsFriendship(ALICE, BOB)).thenReturn(true);
 		when(userRepository.findById(BOB)).thenReturn(Optional.of(bob));
 		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
-		when(conversationRepo.findById(CONVO_ID)).thenReturn(Optional.of(directConversationOf(alice, bob)));
+		when(conversationRepo.findByIdWithGraph(CONVO_ID)).thenReturn(Optional.of(directConversationOf(alice, bob)));
 		when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
 		when(messageMapper.toResponse(any())).thenReturn(new MessageResponse());
 

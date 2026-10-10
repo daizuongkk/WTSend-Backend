@@ -33,6 +33,11 @@ public class FriendRequestService implements IFriendRequestService {
 	private final UserUtils userUtils;
 
 	@Override
+	// One unit of work rather than five independent ones. It does not close the
+	// race between the checks and the insert -- uk_friend_request_pair is the
+	// arbiter for that -- but it does stop the checks reading a half-applied
+	// accept, where the FriendRequest was gone and the Friend not yet visible.
+	@Transactional
 	public void sendFriendRequest(String from, AddFriendRequest request) {
 		String to = request.getTo();
 		String message = request.getMessage();
@@ -84,6 +89,17 @@ public class FriendRequestService implements IFriendRequestService {
 		// Already loaded on the request -- refetching them by id was two extra queries.
 		User fromUser = request.getFromUser();
 		User toUser = request.getToUser();
+
+		// Accepting twice -- a double click, or a request left over from before the
+		// pair became friends some other way -- hit uk_friend_pair and came back as
+		// a 500. They are already friends, which is what the caller wanted, so this
+		// clears the stale request and returns: accepting is idempotent. Throwing
+		// here instead would roll the delete back and leave the row on screen for
+		// the user to click again.
+		if (friendRepo.existsFriendship(fromUser.getId(), toUser.getId())) {
+			friendRequestRepo.delete(request);
+			return;
+		}
 
 		// Friendships are stored with a canonical (low, high) ordering so the pair
 		// is unique regardless of who sent the request.

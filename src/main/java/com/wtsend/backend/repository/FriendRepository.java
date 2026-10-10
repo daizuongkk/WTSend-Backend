@@ -1,7 +1,6 @@
 package com.wtsend.backend.repository;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -14,8 +13,14 @@ public interface FriendRepository extends JpaRepository<Friend, Long> {
 
 	boolean existsByUserAIdAndUserBId(String from, String to);
 
+	/**
+	 * {@code JOIN FETCH} both sides: FriendService maps every row to a
+	 * UserResponse, so without it each friend cost a query of its own.
+	 */
 	@Query("""
 			    SELECT f FROM Friend f
+			    JOIN FETCH f.userA
+			    JOIN FETCH f.userB
 			    WHERE f.userA.id = :userId
 			       OR f.userB.id = :userId
 			""")

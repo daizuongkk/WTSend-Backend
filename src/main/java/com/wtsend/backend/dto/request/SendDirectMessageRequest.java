@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 
 @Getter
@@ -16,9 +17,16 @@ public class SendDirectMessageRequest {
 	// MessageService resolves or creates it.
 	private Long conversationId;
 
+	/**
+	 * Bounded by messages.content, a MySQL TEXT: 65,535 bytes, which under
+	 * utf8mb4 is as few as 16,383 characters. Past that the insert failed with a
+	 * 500 rather than a 400.
+	 */
+	@Size(max = 16000, message = "content is too long")
 	private String content;
 
-	/** Cloudinary URL of an attached image. */
+	/** Cloudinary URL of an attached image. Bounded by its column. */
+	@Size(max = 255, message = "imgUrl must be at most 255 characters")
 	private String imgUrl;
 
 	/**

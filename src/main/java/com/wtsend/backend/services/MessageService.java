@@ -98,7 +98,9 @@ public class MessageService implements IMessageService {
 		} else {
 			// The conversation id comes from the client and is not covered by the
 			// friendship check above, so verify it really is this pair's thread.
-			Conversation existing = conversationRepo.findById(requestedId)
+			// WithGraph because checkMembership walks the participants and their
+			// users: a plain findById made that a lazy load per participant.
+			Conversation existing = conversationRepo.findByIdWithGraph(requestedId)
 					.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND)
 							.withDetail("id=" + requestedId));
 			if (existing.getType() != ConversationType.DIRECT)
@@ -142,7 +144,9 @@ public class MessageService implements IMessageService {
 	public MessageResponse sendGroupMessage(SendGroupMessageRequest request, String senderId) {
 		Long conversationId = request.getConversationId();
 
-		Conversation conversation = conversationRepo.findById(conversationId)
+		// WithGraph because checkMembership walks the participants and their users,
+		// and a group is where that N+1 actually hurt.
+		Conversation conversation = conversationRepo.findByIdWithGraph(conversationId)
 				.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND).withDetail("id=" + conversationId));
 
 		if (!conversation.getType().equals(ConversationType.GROUP))
