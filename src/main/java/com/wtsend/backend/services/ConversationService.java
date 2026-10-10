@@ -104,21 +104,29 @@ public class ConversationService implements IConversationService {
 		Conversation conversation = conversationRepo.findByIdWithGraph(conversationId)
 				.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND).withDetail("id=" + conversationId));
 
+		// Membership first, before either early return. It used to be checked
+		// third, which made this endpoint an existence oracle: a non-member could
+		// tell "conversation exists and has messages" (5006) from "exists and is
+		// empty" (200) from "does not exist". CONVERSATION_ACCESS_DENIED is also
+		// what getMessages answers for the same condition.
+		if (participantRepo.findByConversationIdAndUserId(conversation.getId(), userId).isEmpty())
+			throw new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED)
+					.withDetail("conversationId=" + conversationId + " userId=" + userId);
+
 		if (conversation.getLastMessage() == null)
 			return;
 
+		// One statement, not load-mutate-save: see ParticipantRepository.markSeen
+		// for the lost update that cost.
+		participantRepo.markSeen(conversation.getId(), userId, conversation.getLastMessage(), Instant.now());
+
+		// The sender of the newest message has nothing to be told about their own
+		// message, so no receipt is broadcast -- but the row above is still
+		// written. The early return used to sit before it, leaving the sender's
+		// own lastReadAt and lastSeenMessage stuck at whenever they last read
+		// somebody else's message.
 		if (conversation.getLastMessage().getSender().getId().equals(userId))
 			return;
-
-		Participant participant = participantRepo.findByConversationIdAndUserId(conversation.getId(), userId)
-				.orElseThrow(() -> new AppException(ErrorCode.PARTICIPANT_NOT_FOUND)
-						.withDetail("conversationId=" + conversationId + " userId=" + userId));
-
-		participant.setLastSeenMessage(conversation.getLastMessage());
-		participant.setLastReadAt(Instant.now());
-		participant.setUnreadCounts(0L);
-
-		participantRepo.save(participant);
 
 		// Mapped here, while the entities are attached; broadcast by the
 		// AFTER_COMMIT listener. Emitting from inside this method told clients a

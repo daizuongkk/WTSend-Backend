@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -88,6 +89,12 @@ class MessageServiceTest {
 		alice = user(ALICE);
 		bob = user(BOB);
 		mallory = user(MALLORY);
+
+		// publishNewMessage re-reads the conversation AFTER the counter SQL, so
+		// the broadcast carries post-increment unread counts. Lenient because the
+		// read paths in this class never reach it.
+		lenient().when(conversationRepo.findByIdWithGraph(anyLong()))
+				.thenAnswer(inv -> Optional.of(directConversationOf(alice, bob)));
 	}
 
 	private static User user(String id) {
@@ -178,7 +185,13 @@ class MessageServiceTest {
 		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
 		when(conversationRepo.findByDirectKey(Conversation.directKeyOf(ALICE, BOB)))
 				.thenReturn(Optional.empty());
-		when(conversationRepo.save(any(Conversation.class))).thenAnswer(inv -> inv.getArgument(0));
+		// Hand back a row WITH an id, the way the database does -- the service
+		// re-reads the conversation by that id to build the broadcast payload.
+		when(conversationRepo.save(any(Conversation.class))).thenAnswer(inv -> {
+			Conversation saved = inv.getArgument(0);
+			saved.setId(CONVO_ID);
+			return saved;
+		});
 		when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
 		when(messageMapper.toResponse(any())).thenReturn(new MessageResponse());
 

@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.wtsend.backend.dto.request.SendDirectMessageRequest;
 import com.wtsend.backend.dto.request.SendGroupMessageRequest;
 import com.wtsend.backend.dto.response.ConversationResponse;
+import com.wtsend.backend.dto.response.LastMessage;
 import com.wtsend.backend.dto.response.MessageResponse;
 import com.wtsend.backend.dto.response.MessagesResponse;
 import com.wtsend.backend.event.NewMessageEvent;
@@ -160,20 +161,38 @@ public class MessageService implements IMessageService {
 	}
 
 	/**
-	 * Maps to DTOs while the entities are still attached, then applies the counter
-	 * updates as atomic SQL and hands the DTOs to the AFTER_COMMIT listener. The
-	 * bulk updates clear the persistence context, so mapping has to happen first.
+	 * Applies the counter updates as atomic SQL, then maps the conversation from
+	 * a fresh read and hands the DTOs to the AFTER_COMMIT listener.
+	 *
+	 * <p>
+	 * The order matters and used to be the other way round. Mapping first meant
+	 * {@code ParticipantResponse.unreadCounts} was always one increment behind --
+	 * permanently, for every message: the recipient's {@code new-message} payload
+	 * said 0 when the row said 1, and said 9 on the tenth message. A client that
+	 * trusted the payload showed no badge until the next full reload.
+	 *
+	 * <p>
+	 * The message DTOs are still mapped first, because the bulk updates below
+	 * clear the persistence context and {@code message} would be detached with
+	 * lazy associations after them.
 	 */
 	private MessageResponse publishNewMessage(Conversation conversation, Message message, String senderId) {
-		ConversationResponse conversationDto = conversationMapper.toResponse(conversation);
-		conversationDto.setLastMessage(messageMapper.toLastMessage(message));
-		conversationDto.setLastMessageAt(message.getCreatedAt());
 		MessageResponse messageDto = messageMapper.toResponse(message);
+		LastMessage lastMessageDto = messageMapper.toLastMessage(message);
+		Instant sentAt = message.getCreatedAt();
 
 		Long conversationId = conversation.getId();
-		conversationRepo.updateLastMessage(conversationId, message.getCreatedAt(), message.getId());
+		conversationRepo.updateLastMessage(conversationId, sentAt, message.getId());
 		participantRepo.incrementUnreadCountsForOthers(conversationId, senderId);
 		participantRepo.resetUnreadCountForSender(conversationId, senderId);
+
+		// Re-read after the counters, with the graph the mapper walks.
+		ConversationResponse conversationDto = conversationMapper.toResponse(
+				conversationRepo.findByIdWithGraph(conversationId)
+						.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND)
+								.withDetail("id=" + conversationId)));
+		conversationDto.setLastMessage(lastMessageDto);
+		conversationDto.setLastMessageAt(sentAt);
 
 		applicationEventPublisher.publishEvent(new NewMessageEvent(conversationDto, messageDto));
 

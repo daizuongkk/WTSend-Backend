@@ -49,7 +49,16 @@ public class Participant implements Serializable {
 	User user;
 
 	Instant lastReadAt;
-	Long unreadCounts;
+
+	/**
+	 * Never null, and the default is load-bearing: the increment is SQL
+	 * arithmetic, so a NULL here would make every later increment a no-op and
+	 * kill this conversation's unread badge for good. V5 backfilled the existing
+	 * rows and made the column NOT NULL DEFAULT 0.
+	 */
+	@Column(nullable = false)
+	Long unreadCounts = 0L;
+
 	Instant joinedAt;
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "lastSeenMessageId")
