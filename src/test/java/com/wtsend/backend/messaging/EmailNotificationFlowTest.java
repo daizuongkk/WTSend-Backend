@@ -184,6 +184,26 @@ class EmailNotificationFlowTest {
 	}
 
 	@Test
+	void aPasswordResetCooldownIsAlsoDoneRatherThanAFailure() {
+		User user = User.builder().email("reset-cooldown@example.com").displayName("Reset").build();
+		when(userRepository.findById("user-5")).thenReturn(Optional.of(user));
+		doThrow(new AppException(ErrorCode.PASSWORD_RESET_COOLDOWN))
+				.when(emailService).sendPasswordResetLink(user);
+
+		publisher.publishEmail(EmailKind.PASSWORD_RESET, "user-5", "trace-5");
+
+		await().atMost(Duration.ofSeconds(20))
+				.untilAsserted(() -> verify(emailService).sendPasswordResetLink(user));
+
+		// This one used to burn the retries and land in the DLT, where a replay
+		// would send a second reset link and retire the live one the user was
+		// probably about to click.
+		assertThat(deadLetters(Duration.ofSeconds(3)))
+				.as("a password reset cooldown must not become a dead letter")
+				.doesNotContainKey("user-5");
+	}
+
+	@Test
 	void aPoisonPillGoesToTheDltAndDoesNotStallThePartition() {
 		// Bytes that are not valid JSON at all. Without ErrorHandlingDeserializer
 		// this throws inside poll(), the offset never advances, and this

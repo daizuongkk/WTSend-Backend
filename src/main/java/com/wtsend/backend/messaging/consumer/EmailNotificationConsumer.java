@@ -46,6 +46,11 @@ public class EmailNotificationConsumer {
 			ErrorCode.USER_NOT_FOUND,
 			ErrorCode.EMAIL_ALREADY_EXISTS);
 
+	/** Refusals that mean the mail is already in hand, so the record is done. */
+	private static final Set<ErrorCode> COOLDOWNS = Set.of(
+			ErrorCode.VERIFY_EMAIL_COOLDOWN,
+			ErrorCode.PASSWORD_RESET_COOLDOWN);
+
 	private final UserRepository userRepository;
 	private final EmailService emailService;
 
@@ -77,11 +82,16 @@ public class EmailNotificationConsumer {
 	private void handle(EmailRequestedEvent event, AppException e) {
 		ErrorCode code = e.getErrorCode();
 
-		// The 30-second cooldown already in EmailService is the deduplication,
-		// reused rather than rebuilt: it means "do not spam this user", which
-		// also covers two different events asking for the same mail. Hitting it
-		// is the system working, so the record is done.
-		if (code == ErrorCode.VERIFY_EMAIL_COOLDOWN) {
+		// The cooldown already in EmailService is the deduplication, reused rather
+		// than rebuilt: it means "do not spam this user", which also covers two
+		// different events asking for the same mail. Hitting it is the system
+		// working, so the record is done.
+		//
+		// Both kinds, not just the verification one. PASSWORD_RESET_COOLDOWN used
+		// to fall through to the retries and then to the DLT, where a replay would
+		// have sent a second reset link and retired the live one the user was
+		// probably about to click.
+		if (COOLDOWNS.contains(code)) {
 			log.info("Skipping {} for user {}: still inside the send cooldown",
 					event.kind(), event.userId());
 			return;

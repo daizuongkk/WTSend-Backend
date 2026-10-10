@@ -118,6 +118,23 @@ public class EmailService implements IEmailService {
 						"resetPasswordLink", frontendUrl + "/reset-password?token=" + token)))
 				.build();
 
+		// The token is stored BEFORE the send and the cooldown only after it.
+		// Storing both afterwards meant a Redis failure between the two left the
+		// user holding a mail whose link pointed at a token that did not exist --
+		// and the retry sent another, so five attempts produced five dead links
+		// and nothing recorded. Writing the cooldown up front would have traded
+		// that for the opposite fault: the retry would read its own cooldown, be
+		// reported as a success, and the mail would never go at all.
+		//
+		// Only one live reset link per user, hence the delete: issuing a second
+		// must retire the first, or an older link stays usable for its full TTL.
+		passwordResetTokenRepo.deleteAllByUserId(user.getId());
+		PasswordResetToken issued = passwordResetTokenRepo.save(PasswordResetToken.builder()
+				.token(token)
+				.userId(user.getId())
+				.expiresIn(PasswordResetToken.TTL_MINUTES)
+				.build());
+
 		CreateEmailResponse response;
 		try {
 			response = resend.emails().send(params);
@@ -126,16 +143,8 @@ public class EmailService implements IEmailService {
 			throw new AppException(ErrorCode.EMAIL_SEND_FAILED, e);
 		}
 
-		// Only one live reset link per user: issuing a second must retire the first,
-		// or an older link stays usable for its full TTL.
-		passwordResetTokenRepo.deleteAllByUserId(user.getId());
-
-		passwordResetTokenRepo.save(PasswordResetToken.builder()
-				.token(token)
-				.userId(user.getId())
-				.expiresIn(PasswordResetToken.TTL_MINUTES)
-				.cooldownUntil(Instant.now().plusSeconds(PasswordResetToken.COOLDOWN_SECONDS))
-				.build());
+		issued.setCooldownUntil(Instant.now().plusSeconds(PasswordResetToken.COOLDOWN_SECONDS));
+		passwordResetTokenRepo.save(issued);
 
 		log.info("Password reset email sent successfully. EmailId={}, To={}", response.getId(), user.getEmail());
 	}
@@ -187,6 +196,17 @@ public class EmailService implements IEmailService {
 						"verifyLink", frontendUrl + "/email-verify?token=" + token)))
 				.build();
 
+		// The token is stored BEFORE the send and the cooldown only after it.
+		// Storing both afterwards meant a Redis failure between the two left the
+		// user holding a mail whose link pointed at a token that did not exist --
+		// and the retry sent another, so five attempts produced five dead links
+		// and nothing recorded. Writing the cooldown up front would have traded
+		// that for the opposite fault: the retry would read its own cooldown, be
+		// reported as a success, and the mail would never go at all.
+		emailVerificationTokenRepo.deleteAllByUserId(user.getId());
+		EmailVerificationToken issued = emailVerificationTokenRepo
+				.save(EmailVerificationToken.builder().token(token).userId(user.getId()).expiresIn(15L).build());
+
 		CreateEmailResponse response;
 		try {
 			response = resend.emails().send(params);
@@ -195,11 +215,8 @@ public class EmailService implements IEmailService {
 			throw new AppException(ErrorCode.EMAIL_SEND_FAILED, e);
 		}
 
-		emailVerificationTokenRepo.deleteAllByUserId(user.getId());
-
-		emailVerificationTokenRepo
-				.save(EmailVerificationToken.builder().token(token).userId(user.getId()).expiresIn(15L)
-						.cooldownUntil(Instant.now().plusSeconds(30)).build());
+		issued.setCooldownUntil(Instant.now().plusSeconds(30));
+		emailVerificationTokenRepo.save(issued);
 
 		log.info(
 				"Link email sent successfully. EmailId={}, To={}",
