@@ -31,7 +31,7 @@ public class PresenceHeartbeat {
 
 	private final SocketIOServer server;
 	private final RedisPresenceStore presence;
-	private final SocketRelay relay;
+	private final PresenceAnnouncer announcer;
 
 	@Scheduled(fixedDelay = INTERVAL_MS, initialDelay = INTERVAL_MS)
 	public void beat() {
@@ -50,7 +50,9 @@ public class PresenceHeartbeat {
 			// is reloaded.
 			for (String userId : presence.pruneStale()) {
 				log.info("Presence expired for {}, announcing offline", userId);
-				relay.toAll("presence-changed", new PresenceChange(userId, false));
+				// Their socket is gone, so there is no cached audience to read --
+				// the announcer looks it up.
+				announcer.announce(userId, false);
 			}
 		} catch (Exception e) {
 			// A scheduled method that throws is not rescheduled on some

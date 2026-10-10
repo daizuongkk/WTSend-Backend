@@ -1,7 +1,7 @@
 package com.wtsend.backend.socket;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,8 +18,8 @@ class PresenceHeartbeatTest {
 
 	private final SocketIOServer server = mock(SocketIOServer.class);
 	private final RedisPresenceStore presence = mock(RedisPresenceStore.class);
-	private final SocketRelay relay = mock(SocketRelay.class);
-	private final PresenceHeartbeat heartbeat = new PresenceHeartbeat(server, presence, relay);
+	private final PresenceAnnouncer announcer = mock(PresenceAnnouncer.class);
+	private final PresenceHeartbeat heartbeat = new PresenceHeartbeat(server, presence, announcer);
 
 	@Test
 	void everyUserThisInstanceHoldsASocketForIsRefreshed() {
@@ -46,8 +46,10 @@ class PresenceHeartbeatTest {
 
 		heartbeat.beat();
 
-		verify(relay).toAll(eq("presence-changed"), eq(new PresenceChange("gone-1", false)));
-		verify(relay).toAll(eq("presence-changed"), eq(new PresenceChange("gone-2", false)));
+		// Through the announcer, which looks up who is entitled to hear it: these
+		// users have no socket left, so there is no cached audience to read.
+		verify(announcer).announce("gone-1", false);
+		verify(announcer).announce("gone-2", false);
 	}
 
 	@Test
@@ -58,6 +60,6 @@ class PresenceHeartbeatTest {
 
 		heartbeat.beat();
 
-		verify(relay, org.mockito.Mockito.never()).toAll(any(), any());
+		verify(announcer, org.mockito.Mockito.never()).announce(any(), anyBoolean());
 	}
 }

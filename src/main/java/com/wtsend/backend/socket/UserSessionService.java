@@ -1,7 +1,12 @@
 package com.wtsend.backend.socket;
 
+import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ScheduledFuture;
 
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 
 import com.corundumstudio.socketio.SocketIOClient;
@@ -20,14 +25,31 @@ public class UserSessionService {
 	private final UserService userService;
 	private final RedisPresenceStore onlineUsers;
 	private final ConversationService conversationService;
-	private final SocketRelay relay;
+	private final PresenceAnnouncer announcer;
+	private final TaskScheduler taskScheduler;
+
+	/**
+	 * Who may see this socket's user come and go, cached on the socket at
+	 * connect.
+	 *
+	 * <p>
+	 * Cached because the alternative is a two-EXISTS query on every presence
+	 * change, including the ones a page refresh causes. The cost of caching is
+	 * that a friendship made during the session is not reflected until the
+	 * socket reconnects: the new friend sees them online on their next page
+	 * load, which is the same moment the friendship itself appears in their UI.
+	 */
+	private static final String AUDIENCE = "presenceAudience";
+
+	/** The pending timed disconnect, so a socket that closes first can cancel it. */
+	private static final String EXPIRY_TASK = "tokenExpiryTask";
 
 	public void onClientConnected(Object authToken, SocketIOClient client) {
-		if (authToken == null) {
+		if (!(authToken instanceof SocketAuth auth)) {
 			client.disconnect();
 			return;
 		}
-		String userId = authToken.toString();
+		String userId = auth.userId();
 		UserResponse user;
 		try {
 			// findById throws for an unknown id, it never returns null -- unguarded,
@@ -41,6 +63,8 @@ public class UserSessionService {
 			return;
 		}
 		client.set("user", user);
+		scheduleExpiry(client, auth.expiresAt());
+
 		boolean cameOnline = onlineUsers.add(user.getId(), client.getSessionId(),
 				user.isShowOnlineStatus());
 		log.info("{} connected with socket {}", user.getUsername(), client.getSessionId());
@@ -48,15 +72,59 @@ public class UserSessionService {
 		// The snapshot goes to the arriving client alone. It used to be broadcast
 		// to everyone on every connect, so one person opening a tab resent the
 		// whole online list to every socket.
-		client.sendEvent("online-users", onlineUsers.onlineUserIds());
+		// Only the people entitled to see it, not the whole online list. It used
+		// to be every online user id, so a new account learned who else was using
+		// the app before it had a single friend.
+		List<String> audience = announcer.audienceFor(user.getId());
+		client.set(AUDIENCE, audience);
+
+		Set<String> visible = new LinkedHashSet<>(audience);
+		visible.retainAll(onlineUsers.onlineUserIds());
+		client.sendEvent("online-users", visible);
 
 		// A user who has turned their status off is not announced, and was never
 		// put in the online list to begin with.
 		if (cameOnline && user.isShowOnlineStatus())
-			broadcastPresence(user.getId(), true);
+			announcer.announce(user.getId(), audience, true);
+	}
+
+	/**
+	 * Closes the socket when the token that opened it expires.
+	 *
+	 * <p>
+	 * The handshake was the only time anything checked that token, so a
+	 * connection outlived its own credential: five minutes of validity bought a
+	 * socket that stayed open for as long as the tab did, and neither a password
+	 * change nor a logout elsewhere could reach it.
+	 *
+	 * <p>
+	 * The client is expected to reconnect with a fresh token -- socket.io does
+	 * not retry a server-initiated disconnect by itself, so the frontend has to
+	 * treat this as its cue to refresh and reconnect.
+	 */
+	private void scheduleExpiry(SocketIOClient client, Instant expiresAt) {
+		if (expiresAt == null)
+			return;
+
+		// Never in the past: schedule() with an elapsed instant runs immediately,
+		// which is the right answer anyway for a token that is already dead.
+		ScheduledFuture<?> task = taskScheduler.schedule(() -> {
+			if (client.isChannelOpen()) {
+				log.info("Disconnecting socket {}: its access token has expired", client.getSessionId());
+				client.disconnect();
+			}
+		}, expiresAt);
+
+		client.set(EXPIRY_TASK, task);
 	}
 
 	public void onClientDisconnected(SocketIOClient client) {
+		// Cancel first: the socket is already gone, and leaving the task queued
+		// holds a reference to it for up to the access-token lifetime.
+		ScheduledFuture<?> expiry = client.get(EXPIRY_TASK);
+		if (expiry != null)
+			expiry.cancel(false);
+
 		UserResponse user = client.get("user");
 		if (user == null)
 			return;
@@ -69,18 +137,22 @@ public class UserSessionService {
 		// offline changes nothing for them, while skipping it wrongly would leave
 		// someone shown online after they left.
 		if (onlineUsers.remove(user.getId(), client.getSessionId()))
-			broadcastPresence(user.getId(), false);
+			announcer.announce(user.getId(), audienceOf(client), false);
 
 		log.info("{} disconnected.", user.getUsername());
 	}
 
 	/**
-	 * Through the relay, so a client on another instance hears about it too --
-	 * this used to go to the arriving client's namespace, which is this process
-	 * only.
+	 * The audience cached at connect, or a fresh lookup if this socket somehow
+	 * has none -- better one query than a departure nobody is told about.
 	 */
-	private void broadcastPresence(String userId, boolean online) {
-		relay.toAll("presence-changed", new PresenceChange(userId, online));
+	private List<String> audienceOf(SocketIOClient client) {
+		List<String> cached = client.get(AUDIENCE);
+		if (cached != null)
+			return cached;
+
+		UserResponse user = client.get("user");
+		return user == null ? List.of() : announcer.audienceFor(user.getId());
 	}
 
 	public void subscribeUserToConversations(SocketIOClient client) {

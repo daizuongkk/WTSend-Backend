@@ -5,9 +5,8 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.wtsend.backend.event.OnlineVisibilityChangedEvent;
-import com.wtsend.backend.socket.PresenceChange;
+import com.wtsend.backend.socket.PresenceAnnouncer;
 import com.wtsend.backend.socket.RedisPresenceStore;
-import com.wtsend.backend.socket.SocketRelay;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PresenceVisibilityListener {
 
 	private final RedisPresenceStore presence;
-	private final SocketRelay relay;
+	private final PresenceAnnouncer announcer;
 
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
 	public void onVisibilityChanged(OnlineVisibilityChangedEvent event) {
@@ -44,10 +43,10 @@ public class PresenceVisibilityListener {
 				// somewhere; turning the switch on while logged out should not
 				// light them up for everyone.
 				if (presence.show(event.getUserId()))
-					relay.toAll("presence-changed", new PresenceChange(event.getUserId(), true));
+					announcer.announce(event.getUserId(), true);
 			} else {
 				presence.hide(event.getUserId());
-				relay.toAll("presence-changed", new PresenceChange(event.getUserId(), false));
+				announcer.announce(event.getUserId(), false);
 			}
 		} catch (Exception e) {
 			// After commit there is nothing to roll back, and an exception here
