@@ -82,11 +82,10 @@ public class AuthController {
 	}
 
 	/**
-	 * Always 200 for an address with no account, so this cannot be used to
-	 * discover which addresses are registered. An unverified account is the one
-	 * exception and reports EMAIL_NOT_VERIFIED -- it is sent a verification link
-	 * instead, since resetting through an unproven address would defeat the
-	 * verification flow.
+	 * Always this 200, with this body, for every address: registered, verified,
+	 * unverified, or unknown. No exceptions -- an unverified account is sent a
+	 * verification link instead of a reset link, but is not told so, because
+	 * saying so was enough to tell anyone which addresses are registered.
 	 */
 	@PostMapping("/forgot-password")
 	public ResponseEntity<Map<String, String>> forgotPassword(@RequestBody @Valid ForgotPasswordRequest request) {

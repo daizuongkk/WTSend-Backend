@@ -1,5 +1,8 @@
 package com.wtsend.backend.services;
 
+import java.time.Instant;
+import java.util.function.Supplier;
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -24,6 +27,9 @@ import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.utils.UserUtils;
 import com.wtsend.backend.model.User;
+import com.wtsend.backend.model.UserIdentity;
+import com.wtsend.backend.model.enums.AuthProvider;
+import com.wtsend.backend.repository.UserIdentityRepository;
 import com.wtsend.backend.repository.UserRepository;
 import com.wtsend.backend.services.interfaces.IAuthService;
 
@@ -36,6 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 public class AuthService implements IAuthService {
 
 	private final UserRepository userRepository;
+	private final UserIdentityRepository identityRepository;
 	private final AuthenticationManager authenticationManager;
 	private final JwtService jwtService;
 	private final RefreshTokenService refreshTokenService;
@@ -52,60 +59,132 @@ public class AuthService implements IAuthService {
 
 		Authentication auth = authenticationManager.authenticate(usernamePasswordAuthenticationToken);
 
-		User user = (User) auth.getPrincipal();
-
-		if (!user.isEmailVerified()) {
-
-			// After commit, off the transaction. Also means a cooldown rejection no
-			// longer fails the login itself.
-			eventPublisher.publishEvent(new VerificationEmailRequestedEvent(user.getId()));
-			return AuthResponse.builder().emailVerified(false).accessToken(jwtService.generateToken(user))
-					.email(user.getEmail()).build();
-		}
-
-		var newRefreshToken = refreshTokenService.create(user);
-		return AuthResponse.builder().emailVerified(user.isEmailVerified()).accessToken(jwtService.generateToken(user))
-				.refreshToken(newRefreshToken.token())
-				.build();
+		return session((User) auth.getPrincipal());
 	}
 
-	public AuthResponse googleLogin(String token) {
-
-		GoogleIdToken.Payload oauthPayload = googleAuthService.verify(token);
-		log.info(oauthPayload.getEmail());
-
-		User user = userRepository.findByEmail(oauthPayload.getEmail())
-				.orElseGet(() -> userRepository.save(userMapper.googleOAuth2PayloadToEntity(oauthPayload)));
+	/**
+	 * The response every successful sign-in returns, whichever door it came
+	 * through.
+	 *
+	 * <p>
+	 * An unverified account gets an access token and no refresh token: it can
+	 * read {@code /api/users/me} and verify, and nothing else, so a session it
+	 * cannot renew is exactly right. The verification mail is published rather
+	 * than sent, so a cooldown rejection cannot fail the login that triggered it.
+	 */
+	private AuthResponse session(User user) {
+		if (!user.isEmailVerified()) {
+			eventPublisher.publishEvent(new VerificationEmailRequestedEvent(user.getId()));
+			return AuthResponse.builder()
+					.email(user.getEmail())
+					.emailVerified(false)
+					.accessToken(jwtService.generateToken(user))
+					.build();
+		}
 
 		return AuthResponse.builder()
+				.email(user.getEmail())
+				.emailVerified(true)
 				.accessToken(jwtService.generateToken(user))
 				.refreshToken(refreshTokenService.create(user).token())
 				.build();
+	}
+
+	@Transactional
+	public AuthResponse googleLogin(String token) {
+		GoogleIdToken.Payload payload = googleAuthService.verify(token);
+
+		User user = resolveProviderAccount(AuthProvider.GOOGLE, payload.getSubject(), payload.getEmail(),
+				Boolean.TRUE.equals(payload.getEmailVerified()),
+				() -> userMapper.googleOAuth2PayloadToEntity(payload));
+
+		return session(user);
 	}
 
 	/**
 	 * Signs in through Facebook, creating the account on first use.
 	 *
 	 * <p>
-	 * Matched on email, like Google, so somebody who signed up with a password
-	 * and later uses the Facebook button lands on the same account rather than a
-	 * duplicate. FacebookAuthService has already refused any profile without an
-	 * email, so the lookup key is always present.
+	 * {@code providerVerifiedEmail} is false and that is not an oversight.
+	 * Facebook returns an address but exposes no flag saying it verified one, so
+	 * it cannot stand as proof of ownership -- which means a Facebook login never
+	 * links itself onto an existing account and never sets
+	 * {@code emailVerified}. A first-time Facebook user verifies by mail like
+	 * anyone else.
 	 */
 	@Override
 	@Transactional
 	public AuthResponse facebookLogin(FacebookAuthRequest request) {
 		FacebookUser facebookUser = facebookAuthService.verify(request.getAccessToken());
 
-		User user = userRepository.findByEmail(facebookUser.email())
-				.orElseGet(() -> userRepository.save(withFreeUsername(userMapper.facebookUserToEntity(facebookUser))));
+		User user = resolveProviderAccount(AuthProvider.FACEBOOK, facebookUser.id(), facebookUser.email(),
+				false, () -> userMapper.facebookUserToEntity(facebookUser));
 
-		return AuthResponse.builder()
-				.email(user.getEmail())
-				.emailVerified(user.isEmailVerified())
-				.accessToken(jwtService.generateToken(user))
-				.refreshToken(refreshTokenService.create(user).token())
-				.build();
+		return session(user);
+	}
+
+	/**
+	 * Finds the account behind a provider login, creating or linking as needed.
+	 *
+	 * <p>
+	 * The key is the provider's own subject id, held in {@code user_identity},
+	 * not the email address. Matching on email was an account-takeover path:
+	 * anybody who could get a provider to report a victim's address signed
+	 * straight into the victim's account, and only one of the two providers here
+	 * promises the address was ever verified.
+	 *
+	 * <p>
+	 * So a subject this app has not seen before is linked onto an existing
+	 * account only when the provider says it verified that address. Otherwise the
+	 * caller is refused and told to sign in the way they already can -- a
+	 * deliberate dead end rather than a silent takeover.
+	 *
+	 * <p>
+	 * An address with no account at all is always allowed through. The new
+	 * account simply starts unverified unless the provider vouched for it, which
+	 * is also what stops a provider-reported address from squatting a mailbox
+	 * nobody has proved they own: unverified registrations are swept after 24
+	 * hours.
+	 */
+	private User resolveProviderAccount(AuthProvider provider, String subject, String email,
+			boolean providerVerifiedEmail, Supplier<User> newAccount) {
+
+		var known = identityRepository.findBySubject(provider, subject);
+		if (known.isPresent())
+			return known.get().getUser();
+
+		User user = userRepository.findByEmail(email).orElse(null);
+
+		if (user == null) {
+			user = userRepository.save(withFreeUsername(newAccount.get()));
+		} else if (!providerVerifiedEmail) {
+			throw new AppException(ErrorCode.PROVIDER_LINK_NOT_ALLOWED)
+					.withDetail(provider + " did not verify the address of existing userId=" + user.getId());
+		} else if (!user.isEmailVerified()) {
+			// The provider just proved ownership of the mailbox, which is the one
+			// thing the verification mail exists to establish.
+			user.setEmailVerified(true);
+			userRepository.save(user);
+		}
+
+		identityRepository.save(linked(user, provider, subject, email));
+		return user;
+	}
+
+	/**
+	 * Records the identity, or fills in the subject on the placeholder row that
+	 * {@code V6__user_identity.sql} backfilled for an account that predates the
+	 * table. {@code uk_user_identity_user_provider} is what makes one row per
+	 * provider the only possible outcome.
+	 */
+	private UserIdentity linked(User user, AuthProvider provider, String subject, String email) {
+		UserIdentity identity = identityRepository.findByUser_IdAndProvider(user.getId(), provider)
+				.orElseGet(() -> UserIdentity.builder().user(user).provider(provider).build());
+
+		identity.setProviderUserId(subject);
+		identity.setEmail(email);
+		identity.setLinkedAt(Instant.now());
+		return identity;
 	}
 
 	/**
@@ -180,21 +259,24 @@ public class AuthService implements IAuthService {
 	 * Requests a reset link.
 	 *
 	 * <p>
-	 * An unknown address returns normally and sends nothing, so this cannot be
-	 * used to discover which addresses have accounts.
+	 * Every outcome returns the same 200 and the same body. All three branches
+	 * below are observable only in the mailbox, which is the point: reporting
+	 * EMAIL_NOT_VERIFIED for the middle one answered "does this address have an
+	 * account?" to anybody who cared to ask, and distinguished a registered
+	 * address from an unregistered one on the strength of a single status code.
 	 *
 	 * <p>
-	 * An account whose email is not verified gets the verification link instead,
-	 * and the caller is told so: letting someone set a password through an
-	 * address they have not proved they own is the hole the whole verification
-	 * flow exists to close. Sending the verification mail rather than nothing
-	 * leaves them a way forward -- and verifying also rescues the account from
+	 * An account whose email is not verified gets the verification link rather
+	 * than a reset link: letting someone set a password through an address they
+	 * have not proved they own is the hole the whole verification flow exists to
+	 * close. Sending that mail rather than nothing still leaves them a way
+	 * forward -- and verifying also rescues the account from
 	 * UnverifiedAccountCleanupJob.
 	 *
 	 * <p>
-	 * An account with no password (signed up through Google) is allowed: owning
-	 * the mailbox is the same proof the link relies on, and the result is that
-	 * password login becomes available alongside Google.
+	 * An account with no password (signed up through a provider) is allowed:
+	 * owning the mailbox is the same proof the link relies on, and the result is
+	 * that password login becomes available alongside the provider.
 	 */
 	@Override
 	public void forgotPassword(ForgotPasswordRequest request) {
@@ -206,8 +288,9 @@ public class AuthService implements IAuthService {
 
 		if (!user.isEmailVerified()) {
 			eventPublisher.publishEvent(new VerificationEmailRequestedEvent(user.getId()));
-			throw new AppException(ErrorCode.EMAIL_NOT_VERIFIED)
-					.withDetail("userId=" + user.getId() + " (asked for a password reset before verifying)");
+			log.info("Password reset requested before verification; sent the verification link instead, userId={}",
+					user.getId());
+			return;
 		}
 
 		eventPublisher.publishEvent(new PasswordResetRequestedEvent(user.getId()));

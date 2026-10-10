@@ -1,6 +1,7 @@
 package com.wtsend.backend.services;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -114,16 +115,15 @@ class PasswordResetTest {
 	}
 
 	@Test
-	void anUnverifiedAccountIsSentAVerificationLinkAndRefused() {
+	void anUnverifiedAccountIsSentAVerificationLinkAndNotToldApart() {
 		// Resetting through an address nobody proved they own would defeat the
-		// verification flow. The verification mail still goes out, so the user has
-		// a way forward instead of a dead end.
+		// verification flow, so the verification mail goes out instead -- and the
+		// caller is told nothing. Reporting EMAIL_NOT_VERIFIED here, as this used
+		// to, answered "does this address have an account?" to anyone who asked:
+		// 403 meant registered, 200 meant anything else.
 		when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user(false, "{bcrypt}old")));
 
-		assertThatThrownBy(() -> authService.forgotPassword(forgot()))
-				.isInstanceOf(AppException.class)
-				.extracting(ex -> ((AppException) ex).getErrorCode())
-				.isEqualTo(ErrorCode.EMAIL_NOT_VERIFIED);
+		assertThatCode(() -> authService.forgotPassword(forgot())).doesNotThrowAnyException();
 
 		ArgumentCaptor<Object> published = ArgumentCaptor.forClass(Object.class);
 		verify(eventPublisher).publishEvent(published.capture());

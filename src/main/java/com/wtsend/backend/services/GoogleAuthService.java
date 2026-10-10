@@ -9,6 +9,7 @@ import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCo
 import org.springframework.security.oauth2.client.endpoint.RestClientAuthorizationCodeTokenResponseClient;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.core.OAuth2AuthorizationException;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AccessTokenResponse;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationExchange;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
@@ -62,18 +63,34 @@ public class GoogleAuthService {
 
 	public GoogleIdToken.Payload verify(String credential) {
 		try {
+			String idTokenValue = authenticate(credential);
+
+			// An exchange that succeeded without returning an id_token: the cast in
+			// authenticate() yields null and verify() then threw NPE as a 500.
+			if (idTokenValue == null) {
+				throw new AppException(ErrorCode.GOOGLE_TOKEN_INVALID)
+						.withDetail("the code exchange returned no id_token");
+			}
+
 			GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
 					new NetHttpTransport(), new GsonFactory())
 					.setAudience(Collections.singletonList(clientId))
 					.build();
 
-			GoogleIdToken idToken = verifier.verify(authenticate(credential));
+			GoogleIdToken idToken = verifier.verify(idTokenValue);
 
 			if (idToken == null) {
 				throw new AppException(ErrorCode.GOOGLE_TOKEN_INVALID);
 			}
 
 			return idToken.getPayload();
+
+			// Google refusing the authorization code -- expired, already spent, or
+			// issued to a different client -- is a bad credential, not a fault on
+			// this side. It is a RuntimeException, so it used to pass straight
+			// through as a 500.
+		} catch (OAuth2AuthorizationException e) {
+			throw new AppException(ErrorCode.GOOGLE_TOKEN_INVALID, e);
 
 			// Narrowed from catch(Exception): the previous wide catch forced a no-op
 			// `catch (RuntimeException e) { throw e; }` above it just to let the

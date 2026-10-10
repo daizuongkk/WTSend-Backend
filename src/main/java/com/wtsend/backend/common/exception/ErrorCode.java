@@ -48,6 +48,9 @@ public enum ErrorCode {
 	FACEBOOK_VERIFICATION_FAILED(2012, HttpStatus.BAD_GATEWAY, "Could not verify the Facebook token"),
 	FACEBOOK_EMAIL_REQUIRED(2013, HttpStatus.BAD_REQUEST,
 			"Facebook did not provide an email address. Please grant the email permission."),
+	PROVIDER_LINK_NOT_ALLOWED(2014, HttpStatus.CONFLICT,
+			"This email already belongs to an account. Sign in the way you normally do, "
+					+ "then link this provider from your settings."),
 
 	// --- 3000-3099 user ---------------------------------------------------
 	USER_NOT_FOUND(3000, HttpStatus.NOT_FOUND, "User not found"),

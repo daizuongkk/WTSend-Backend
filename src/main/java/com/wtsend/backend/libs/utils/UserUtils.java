@@ -11,7 +11,6 @@ import com.wtsend.backend.dto.request.SignUpRequest;
 import com.wtsend.backend.dto.response.FriendResponse;
 import com.wtsend.backend.dto.response.Sender;
 import com.wtsend.backend.dto.response.UserResponse;
-import com.wtsend.backend.model.enums.AuthProvider;
 import com.wtsend.backend.model.User;
 
 import lombok.RequiredArgsConstructor;
@@ -53,7 +52,6 @@ public class UserUtils {
 
 		return User.builder().password(passwordEncoder.encode(request.getPassword()))
 				.email(request.getEmail()).displayName(request.getEmail().split("@")[0])
-				.authProvider(AuthProvider.LOCAL)
 				.build();
 	}
 
@@ -81,24 +79,42 @@ public class UserUtils {
 	public User facebookUserToEntity(FacebookUser facebookUser) {
 		return User.builder()
 				.username(providerUsername("fb_", facebookUser.id()))
-				.authProvider(AuthProvider.FACEBOOK)
-				.displayName(facebookUser.name())
+				.displayName(displayNameOr(facebookUser.name(), facebookUser.email()))
 				.email(facebookUser.email())
 				.avatarUrl(facebookUser.pictureUrl())
-				// Facebook only returns an email it has verified, and
-				// FacebookAuthService refuses a profile without one.
-				.emailVerified(true)
+				// NOT verified, although Graph did return an address. Facebook
+				// exposes no verified flag for it, so it is not proof that the user
+				// owns the mailbox -- and that proof is the only thing this flag
+				// means. The ordinary verification mail asks for it, as for any
+				// other sign-up.
+				.emailVerified(false)
 				.build();
 	}
 
 	public User googleOAuth2PayloadToEntity(GoogleIdToken.Payload payload) {
 		return User.builder()
 				.username(providerUsername("google_", payload.getSubject()))
-				.authProvider(AuthProvider.GOOGLE)
-				.displayName(payload.get("name").toString())
+				.displayName(displayNameOr(claim(payload, "name"), payload.getEmail()))
 				.email(payload.getEmail())
-				.avatarUrl(payload.get("picture").toString())
-				.emailVerified(payload.getEmailVerified())
+				.avatarUrl(claim(payload, "picture"))
+				.emailVerified(Boolean.TRUE.equals(payload.getEmailVerified()))
 				.build();
+	}
+
+	/**
+	 * Both claims read through here are optional: {@code picture} is absent for
+	 * an account with no profile photo, {@code name} for one that granted only
+	 * the email scope, and {@code email_verified} comes back as a boxed null.
+	 * {@code .toString()} on any of them was an NPE inside a sign-in that was
+	 * otherwise perfectly valid.
+	 */
+	private static String claim(GoogleIdToken.Payload payload, String name) {
+		Object value = payload.get(name);
+		return value == null ? null : value.toString();
+	}
+
+	/** {@code display_name} is NOT NULL and neither provider promises to send one. */
+	private static String displayNameOr(String name, String email) {
+		return name == null || name.isBlank() ? email.split("@")[0] : name;
 	}
 }
