@@ -64,9 +64,12 @@ class RedisPresenceStoreTest {
 	}
 
 	@Test
-	void removingASocketThatWasNeverThereDoesNotReportADeparture() {
+	void removingASocketThatWasNeverThereStillReportsADeparture() {
 		// A disconnect for a socket this instance never added -- a restart in the
-		// middle of a connection, or a duplicate disconnect handler.
+		// middle of a connection, or a duplicate disconnect handler. It reports a
+		// departure on purpose: no sockets are left, and announcing an offline
+		// nobody was waiting for costs nothing, while staying silent would leave
+		// the user shown online after they left.
 		assertThat(presence.remove(userId, UUID.randomUUID())).isTrue();
 		assertThat(presence.onlineUserIds()).doesNotContain(userId);
 	}

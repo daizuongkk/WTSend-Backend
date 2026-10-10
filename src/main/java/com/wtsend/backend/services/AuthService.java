@@ -3,6 +3,7 @@ package com.wtsend.backend.services;
 import java.time.Instant;
 import java.util.function.Supplier;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -224,9 +225,21 @@ public class AuthService implements IAuthService {
 			throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
 		}
 
-		User newUser = userMapper.toUser(request);
-
-		User savedUser = userRepository.save(newUser);
+		User savedUser;
+		try {
+			// saveAndFlush, not save: the id is generated in Java, so Hibernate has
+			// no reason to issue the INSERT before commit -- and a constraint
+			// violation raised at commit happens outside this try, where the catch
+			// below can do nothing with it.
+			savedUser = userRepository.saveAndFlush(userMapper.toUser(request));
+		} catch (DataIntegrityViolationException e) {
+			// The existsByEmail above is a check-then-insert, so two registrations
+			// for the same address landing together both passed it and the loser
+			// hit uk_users_email as a 500. The index is the real arbiter; this just
+			// reports what it decided.
+			throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS, e)
+					.withDetail("lost the race on uk_users_email");
+		}
 
 		// Published, not sent: the listener runs after this transaction commits, so
 		// the connection is released before the blocking call to Resend. A send
