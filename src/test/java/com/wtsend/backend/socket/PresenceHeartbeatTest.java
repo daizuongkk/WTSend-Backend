@@ -32,7 +32,9 @@ class PresenceHeartbeatTest {
 
 		heartbeat.beat();
 
-		verify(presence).touch("user-1");
+		// Visibility travels with it: the heartbeat is the only caller, and it is
+		// what decides whether a refresh may also re-register.
+		verify(presence).touch("user-1", false);
 	}
 
 	@Test

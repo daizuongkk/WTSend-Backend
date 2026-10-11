@@ -3,11 +3,13 @@ package com.wtsend.backend.services;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.wtsend.backend.dto.request.AddFriendRequest;
 import com.wtsend.backend.dto.response.FriendRequestResponse;
+import com.wtsend.backend.event.FriendshipCreatedEvent;
 import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.utils.UserUtils;
@@ -31,6 +33,8 @@ public class FriendRequestService implements IFriendRequestService {
 	private final UserRepository userRepo;
 
 	private final UserUtils userUtils;
+
+	private final ApplicationEventPublisher eventPublisher;
 
 	@Override
 	// One unit of work rather than five independent ones. It does not close the
@@ -112,6 +116,12 @@ public class FriendRequestService implements IFriendRequestService {
 		friendRepo.save(friend);
 
 		friendRequestRepo.delete(request);
+
+		// Published, not emitted: this method is transactional, and presence for a
+		// relationship that might still roll back is worse than presence a
+		// moment late. The listener is what stops the two of them showing each
+		// other offline until one reconnects.
+		eventPublisher.publishEvent(new FriendshipCreatedEvent(userA.getId(), userB.getId()));
 	}
 
 	@Override

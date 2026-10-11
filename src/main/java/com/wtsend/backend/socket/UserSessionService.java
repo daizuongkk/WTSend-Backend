@@ -24,19 +24,6 @@ public class UserSessionService {
 	private final ConversationService conversationService;
 	private final PresenceAnnouncer announcer;
 
-	/**
-	 * Who may see this socket's user come and go, cached on the socket at
-	 * connect.
-	 *
-	 * <p>
-	 * Cached because the alternative is a two-EXISTS query on every presence
-	 * change, including the ones a page refresh causes. The cost of caching is
-	 * that a friendship made during the session is not reflected until the
-	 * socket reconnects: the new friend sees them online on their next page
-	 * load, which is the same moment the friendship itself appears in their UI.
-	 */
-	private static final String AUDIENCE = "presenceAudience";
-
 	public void onClientConnected(Object authToken, SocketIOClient client) {
 		if (authToken == null) {
 			client.disconnect();
@@ -57,6 +44,13 @@ public class UserSessionService {
 		}
 		client.set("user", user);
 
+		// Before anything is announced. Presence is addressed to personal rooms, so
+		// a socket that has not joined its own yet cannot receive the arrival of
+		// anyone who connects in the window between the snapshot below and the
+		// join -- and the snapshot would already have been taken. The conversation
+		// rooms still happen in subscribeUserToConversations, after a query.
+		client.joinRoom(SocketRooms.user(user.getId()));
+
 		boolean cameOnline = onlineUsers.add(user.getId(), client.getSessionId(),
 				user.isShowOnlineStatus());
 		log.info("{} connected with socket {}", user.getUsername(), client.getSessionId());
@@ -67,8 +61,12 @@ public class UserSessionService {
 		// Only the people entitled to see it, not the whole online list. It used
 		// to be every online user id, so a new account learned who else was using
 		// the app before it had a single friend.
+		// Queried, not cached on the socket. Caching it meant a friendship made
+		// during the session was invisible to both sides until one of them
+		// reconnected -- they showed each other offline in a conversation they
+		// were visibly typing in. One two-EXISTS query per connect or disconnect
+		// is a price worth paying to not have a second source of truth.
 		List<String> audience = announcer.audienceFor(user.getId());
-		client.set(AUDIENCE, audience);
 
 		Set<String> visible = new LinkedHashSet<>(audience);
 		visible.retainAll(onlineUsers.onlineUserIds());
@@ -107,22 +105,9 @@ public class UserSessionService {
 		// offline changes nothing for them, while skipping it wrongly would leave
 		// someone shown online after they left.
 		if (onlineUsers.remove(user.getId(), client.getSessionId()))
-			announcer.announce(user.getId(), audienceOf(client), false);
+			announcer.announce(user.getId(), false);
 
 		log.info("{} disconnected.", user.getUsername());
-	}
-
-	/**
-	 * The audience cached at connect, or a fresh lookup if this socket somehow
-	 * has none -- better one query than a departure nobody is told about.
-	 */
-	private List<String> audienceOf(SocketIOClient client) {
-		List<String> cached = client.get(AUDIENCE);
-		if (cached != null)
-			return cached;
-
-		UserResponse user = client.get("user");
-		return user == null ? List.of() : announcer.audienceFor(user.getId());
 	}
 
 	public void subscribeUserToConversations(SocketIOClient client) {
@@ -130,14 +115,11 @@ public class UserSessionService {
 		if (user == null)
 			return;
 
-		// The personal room first, and unconditionally. It used to be joined
-		// after the loop below, behind an early return for "this user has no
-		// conversations yet" -- so a brand new account joined no room at all,
-		// and since every message is addressed to the participants' personal
-		// rooms, nothing could ever be delivered to it. The first conversation
-		// of a user's life was the one case that never worked.
-		client.joinRoom(SocketRooms.user(user.getId()));
-
+		// The personal room is joined in onClientConnected, before any presence is
+		// announced. It used to be joined here, after the loop below and behind an
+		// early return for "this user has no conversations yet" -- so a brand new
+		// account joined no room at all, and since every message is addressed to
+		// the participants' personal rooms, nothing could ever be delivered to it.
 		List<Long> conversationIds = conversationService.getConversationIdsByUserId(user.getId());
 		if (conversationIds == null || conversationIds.isEmpty())
 			return;

@@ -123,14 +123,27 @@ public class RedisPresenceStore {
 	 * KEYS: sockets, online. ARGV: now, socketsTtl, userId.
 	 *
 	 * <p>
-	 * {@code ZADD ... XX} refreshes an existing entry and never creates one,
-	 * which is what keeps {@link #hide(String)} from being undone by the next
-	 * heartbeat 30 seconds later. A heartbeat's job is liveness, not
-	 * registration.
+	 * {@code XX} only when the user is hidden, and that distinction is
+	 * load-bearing in both directions. For a hidden user it is what keeps
+	 * {@link #hide(String)} from being undone by the next heartbeat 30 seconds
+	 * later. For a visible one it was a trap: once an entry left
+	 * {@code presence:online} -- which a single heartbeat later than the 90s read
+	 * window is enough to do, since {@link #pruneStale()} removes it -- no
+	 * heartbeat could ever put it back, and every still-connected user stayed
+	 * invisible for the rest of their socket's life. A heartbeat's job is
+	 * liveness, and re-registering a user this instance is still holding a
+	 * socket for is exactly that.
+	 *
+	 * <p>
+	 * KEYS: sockets, online. ARGV: now, socketsTtl, userId, "1" when visible.
 	 */
 	private static final RedisScript<Long> TOUCH = new DefaultRedisScript<>("""
 			redis.call('EXPIRE', KEYS[1], ARGV[2])
-			redis.call('ZADD', KEYS[2], 'XX', ARGV[1], ARGV[3])
+			if ARGV[4] == '1' then
+			  redis.call('ZADD', KEYS[2], ARGV[1], ARGV[3])
+			else
+			  redis.call('ZADD', KEYS[2], 'XX', ARGV[1], ARGV[3])
+			end
 			return 1
 			""", Long.class);
 
@@ -187,9 +200,16 @@ public class RedisPresenceStore {
 		return wentOffline != null && wentOffline == 1L;
 	}
 
-	/** Re-stamps the heartbeat for a user this instance still holds a socket for. */
-	public void touch(String userId) {
-		redis.execute(TOUCH, keys(userId), now(), ttlSeconds(SOCKETS_TTL), userId);
+	/**
+	 * Re-stamps the heartbeat for a user this instance still holds a socket for.
+	 *
+	 * @param visible {@code User.showOnlineStatus}. False means refresh only an
+	 *                entry that already exists, so a hidden user is not put back
+	 *                in the list by their own heartbeat.
+	 */
+	public void touch(String userId, boolean visible) {
+		redis.execute(TOUCH, keys(userId), now(), ttlSeconds(SOCKETS_TTL), userId,
+				visible ? "1" : "0");
 	}
 
 	public Set<String> onlineUserIds() {

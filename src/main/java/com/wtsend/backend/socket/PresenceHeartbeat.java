@@ -39,9 +39,10 @@ public class PresenceHeartbeat {
 			for (SocketIOClient client : server.getAllClients()) {
 				UserResponse user = client.get("user");
 				if (user != null)
-					// touch only refreshes an entry that exists, so a user who has
-					// hidden themselves is not quietly put back in the list here.
-					presence.touch(user.getId());
+					// The visibility flag is what stops a hidden user being put back
+					// in the list by their own heartbeat -- and what lets a visible
+					// one come back after a prune that was only ever about liveness.
+					presence.touch(user.getId(), user.isShowOnlineStatus());
 			}
 			// Whoever fell out of the list has to be announced. This is the only
 			// moment anyone learns that an instance died without running its

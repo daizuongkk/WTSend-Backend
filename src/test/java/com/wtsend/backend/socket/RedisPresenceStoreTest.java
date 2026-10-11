@@ -92,9 +92,25 @@ class RedisPresenceStoreTest {
 		assertThat(presence.onlineUserIds()).doesNotContain(userId);
 
 		// The heartbeat refreshes entries; it must not recreate this one, or
-		// hiding would quietly reverse itself within 30 seconds.
-		presence.touch(userId);
+		// hiding would quietly reverse itself within 30 seconds. That is what the
+		// visibility flag buys: false means refresh an entry, never create one.
+		presence.touch(userId, false);
 		assertThat(presence.onlineUserIds()).doesNotContain(userId);
+	}
+
+	@Test
+	void aVisibleUserPrunedByMistakeIsPutBackByTheirOwnHeartbeat() {
+		presence.add(userId, UUID.randomUUID(), true);
+
+		// What a heartbeat later than the 90s read window does: pruneStale drops
+		// the entry even though the socket is still open. With ZADD XX on every
+		// touch, nothing could ever put it back and the user stayed invisible for
+		// the rest of their socket's life -- one late sweep, permanent.
+		redis.opsForZSet().remove("presence:online", userId);
+		assertThat(presence.onlineUserIds()).doesNotContain(userId);
+
+		presence.touch(userId, true);
+		assertThat(presence.onlineUserIds()).contains(userId);
 	}
 
 	@Test
