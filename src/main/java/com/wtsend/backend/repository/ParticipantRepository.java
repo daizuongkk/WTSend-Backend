@@ -43,8 +43,13 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
 	 * the read receipt told the sender it had been seen. Participant carries no
 	 * {@code @Version}, so that was a silent lost update rather than a failure.
 	 *
-	 * @return rows updated -- 0 means the caller is not a participant, which
-	 *         saves a separate membership read
+	 * <p>
+	 * {@code clearAutomatically} detaches everything the caller is holding, so a
+	 * caller that needs to report the new state has to read it back afterwards --
+	 * the detached copy keeps its pre-update values and gives no hint that it is
+	 * stale. See {@code ConversationService.markAsSeen}.
+	 *
+	 * @return rows updated -- 0 means the caller is not a participant
 	 */
 	@Modifying(clearAutomatically = true, flushAutomatically = true)
 	@Query("""

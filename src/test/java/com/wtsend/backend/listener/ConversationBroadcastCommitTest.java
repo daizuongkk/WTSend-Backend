@@ -2,6 +2,7 @@ package com.wtsend.backend.listener;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -10,10 +11,12 @@ import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,6 +26,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.corundumstudio.socketio.BroadcastOperations;
 import com.corundumstudio.socketio.SocketIOServer;
+import com.wtsend.backend.dto.response.ConversationResponse;
+import com.wtsend.backend.dto.response.ParticipantResponse;
 import com.wtsend.backend.model.Conversation;
 import com.wtsend.backend.model.Message;
 import com.wtsend.backend.model.Participant;
@@ -68,6 +73,7 @@ class ConversationBroadcastCommitTest {
 	private TransactionTemplate transactions;
 	private Long conversationId;
 	private String readerId;
+	private Long lastMessageId;
 	private final List<String> createdUserIds = new ArrayList<>();
 
 	@BeforeEach
@@ -104,6 +110,7 @@ class ConversationBroadcastCommitTest {
 			conversationRepo.save(conversation);
 
 			conversationId = conversation.getId();
+			lastMessageId = message.getId();
 		});
 	}
 
@@ -143,6 +150,28 @@ class ConversationBroadcastCommitTest {
 		createdUserIds.forEach(userId -> verify(server).getRoomOperations(eq(SocketRooms.user(userId))));
 		verify(roomOperations, times(createdUserIds.size()))
 				.sendEvent(eq("read-message"), any(Object.class));
+	}
+
+	@Test
+	void theBroadcastReceiptCarriesTheStateAfterTheRead() {
+		conversationService.markAsSeen(conversationId, readerId);
+
+		ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+		verify(roomOperations, atLeastOnce()).sendEvent(eq("read-message"), payload.capture());
+
+		ConversationResponse broadcast = (ConversationResponse) ((Map<?, ?>) payload.getValue())
+				.get("conversation");
+		ParticipantResponse reader = broadcast.getParticipants().stream()
+				.filter(p -> p.getUserId().equals(readerId))
+				.findFirst().orElseThrow();
+
+		// markSeen clears the persistence context, so the entity this used to be
+		// mapped from was detached and still holding its pre-update values. The
+		// payload said unreadCounts=1 and pointed lastSeenMessageId at the message
+		// before this one -- so the reader's own badge re-lit from the echo, and
+		// the sender's "seen" marker never reached the newest message.
+		assertThat(reader.getUnreadCounts()).isZero();
+		assertThat(reader.getLastSeenMessageId()).isEqualTo(lastMessageId);
 	}
 
 	@Test

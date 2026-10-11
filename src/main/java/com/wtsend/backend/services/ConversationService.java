@@ -18,6 +18,7 @@ import com.wtsend.backend.libs.ConversationMapper;
 import com.wtsend.backend.libs.MessageMapper;
 import com.wtsend.backend.model.Conversation;
 import com.wtsend.backend.model.GroupInfo;
+import com.wtsend.backend.model.Message;
 import com.wtsend.backend.model.Participant;
 import com.wtsend.backend.model.User;
 import com.wtsend.backend.model.enums.ConversationType;
@@ -134,24 +135,40 @@ public class ConversationService implements IConversationService {
 		if (conversation.getLastMessage() == null)
 			return;
 
+		// Read off the managed entity before the write below detaches it.
+		Message lastMessage = conversation.getLastMessage();
+		String lastSenderId = lastMessage.getSender().getId();
+
 		// One statement, not load-mutate-save: see ParticipantRepository.markSeen
 		// for the lost update that cost.
-		participantRepo.markSeen(conversation.getId(), userId, conversation.getLastMessage(), Instant.now());
+		participantRepo.markSeen(conversation.getId(), userId, lastMessage, Instant.now());
 
 		// The sender of the newest message has nothing to be told about their own
 		// message, so no receipt is broadcast -- but the row above is still
 		// written. The early return used to sit before it, leaving the sender's
 		// own lastReadAt and lastSeenMessage stuck at whenever they last read
 		// somebody else's message.
-		if (conversation.getLastMessage().getSender().getId().equals(userId))
+		if (lastSenderId.equals(userId))
 			return;
 
-		// Mapped here, while the entities are attached; broadcast by the
-		// AFTER_COMMIT listener. Emitting from inside this method told clients a
-		// message had been read before the write was durable.
+		// Read back, and that is the whole point of this line. markSeen is
+		// @Modifying(clearAutomatically = true), so `conversation` above is
+		// detached and still carrying its pre-update field values -- and because
+		// findByIdWithGraph had already fetched every association, mapping it
+		// raised no LazyInitializationException. It simply broadcast the unread
+		// count the reader had just cleared and a seen marker one message behind,
+		// which the client then wrote back over its own optimistic clear: the
+		// badge re-lit and "seen" never advanced. Same shape as
+		// MessageService.publishNewMessage, which already had to learn this.
+		Conversation afterRead = conversationRepo.findByIdWithGraph(conversationId)
+				.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND).withDetail("id=" + conversationId));
+
+		// Mapped from the fresh read; broadcast by the AFTER_COMMIT listener.
+		// Emitting from inside this method told clients a message had been read
+		// before the write was durable.
 		eventPublisher.publishEvent(new ConversationReadEvent(
-				conversationMapper.toResponse(conversation),
-				messageMapper.toLastMessage(conversation.getLastMessage())));
+				conversationMapper.toResponse(afterRead),
+				messageMapper.toLastMessage(afterRead.getLastMessage())));
 
 	}
 
