@@ -1,12 +1,9 @@
 package com.wtsend.backend.socket;
 
-import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ScheduledFuture;
 
-import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 
 import com.corundumstudio.socketio.SocketIOClient;
@@ -26,7 +23,6 @@ public class UserSessionService {
 	private final RedisPresenceStore onlineUsers;
 	private final ConversationService conversationService;
 	private final PresenceAnnouncer announcer;
-	private final TaskScheduler taskScheduler;
 
 	/**
 	 * Who may see this socket's user come and go, cached on the socket at
@@ -41,15 +37,12 @@ public class UserSessionService {
 	 */
 	private static final String AUDIENCE = "presenceAudience";
 
-	/** The pending timed disconnect, so a socket that closes first can cancel it. */
-	private static final String EXPIRY_TASK = "tokenExpiryTask";
-
 	public void onClientConnected(Object authToken, SocketIOClient client) {
-		if (!(authToken instanceof SocketAuth auth)) {
+		if (authToken == null) {
 			client.disconnect();
 			return;
 		}
-		String userId = auth.userId();
+		String userId = authToken.toString();
 		UserResponse user;
 		try {
 			// findById throws for an unknown id, it never returns null -- unguarded,
@@ -63,7 +56,6 @@ public class UserSessionService {
 			return;
 		}
 		client.set("user", user);
-		scheduleExpiry(client, auth.expiresAt());
 
 		boolean cameOnline = onlineUsers.add(user.getId(), client.getSessionId(),
 				user.isShowOnlineStatus());
@@ -89,42 +81,20 @@ public class UserSessionService {
 	}
 
 	/**
-	 * Closes the socket when the token that opened it expires.
+	 * A socket is NOT closed when the access token that opened it expires, and
+	 * that is deliberate.
 	 *
 	 * <p>
-	 * The handshake was the only time anything checked that token, so a
-	 * connection outlived its own credential: five minutes of validity bought a
-	 * socket that stayed open for as long as the tab did, and neither a password
-	 * change nor a logout elsewhere could reach it.
-	 *
-	 * <p>
-	 * The client is expected to reconnect with a fresh token -- socket.io does
-	 * not retry a server-initiated disconnect by itself, so the frontend has to
-	 * treat this as its cue to refresh and reconnect.
+	 * It was, briefly. The access token lives five minutes, so every socket in
+	 * the system was torn down and rebuilt every five minutes -- and each
+	 * teardown is a real disconnect, which drops the user from the online list
+	 * and announces them offline to every friend. Everyone blinked offline on a
+	 * timer, and every realtime frame in the gap was lost, because the server
+	 * does not replay. The protection it bought was thin by comparison: the
+	 * socket carries no authority of its own, every write still goes through the
+	 * REST API, and that API does check the token on every request.
 	 */
-	private void scheduleExpiry(SocketIOClient client, Instant expiresAt) {
-		if (expiresAt == null)
-			return;
-
-		// Never in the past: schedule() with an elapsed instant runs immediately,
-		// which is the right answer anyway for a token that is already dead.
-		ScheduledFuture<?> task = taskScheduler.schedule(() -> {
-			if (client.isChannelOpen()) {
-				log.info("Disconnecting socket {}: its access token has expired", client.getSessionId());
-				client.disconnect();
-			}
-		}, expiresAt);
-
-		client.set(EXPIRY_TASK, task);
-	}
-
 	public void onClientDisconnected(SocketIOClient client) {
-		// Cancel first: the socket is already gone, and leaving the task queued
-		// holds a reference to it for up to the access-token lifetime.
-		ScheduledFuture<?> expiry = client.get(EXPIRY_TASK);
-		if (expiry != null)
-			expiry.cancel(false);
-
 		UserResponse user = client.get("user");
 		if (user == null)
 			return;

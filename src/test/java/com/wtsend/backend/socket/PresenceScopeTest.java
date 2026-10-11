@@ -9,7 +9,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -23,7 +22,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.scheduling.TaskScheduler;
 
 import com.corundumstudio.socketio.SocketIOClient;
 import com.wtsend.backend.dto.response.UserResponse;
@@ -53,8 +51,6 @@ class PresenceScopeTest {
 	private ConversationService conversationService;
 	@Mock
 	private PresenceAnnouncer announcer;
-	@Mock
-	private TaskScheduler taskScheduler;
 
 	@InjectMocks
 	private UserSessionService userSession;
@@ -76,8 +72,8 @@ class PresenceScopeTest {
 		when(conversationService.getConversationIdsByUserId(ALICE)).thenReturn(List.of());
 	}
 
-	private void connect(Instant expiresAt) {
-		userSession.onClientConnected(new SocketAuth(ALICE, expiresAt), client);
+	private void connect() {
+		userSession.onClientConnected(ALICE, client);
 	}
 
 	@Test
@@ -86,7 +82,7 @@ class PresenceScopeTest {
 		when(onlineUsers.onlineUserIds()).thenReturn(Set.of("friend-1", "a-stranger", ALICE));
 		when(onlineUsers.add(eq(ALICE), any(), eq(true))).thenReturn(true);
 
-		connect(null);
+		connect();
 
 		ArgumentCaptor<Object> snapshot = ArgumentCaptor.forClass(Object.class);
 		verify(client).sendEvent(eq("online-users"), snapshot.capture());
@@ -104,7 +100,7 @@ class PresenceScopeTest {
 		when(onlineUsers.onlineUserIds()).thenReturn(Set.of());
 		when(onlineUsers.add(eq(ALICE), any(), eq(true))).thenReturn(true);
 
-		connect(null);
+		connect();
 
 		verify(announcer).announce(ALICE, audience, true);
 	}
@@ -115,7 +111,7 @@ class PresenceScopeTest {
 		when(onlineUsers.onlineUserIds()).thenReturn(Set.of());
 		when(onlineUsers.add(eq(ALICE), any(), eq(true))).thenReturn(true);
 
-		connect(null);
+		connect();
 
 		// An account with no friends and no conversations: there is no audience,
 		// and the announcer is what refuses to broadcast to one.
@@ -129,32 +125,9 @@ class PresenceScopeTest {
 		when(onlineUsers.onlineUserIds()).thenReturn(Set.of());
 		when(onlineUsers.add(eq(ALICE), any(), eq(false))).thenReturn(true);
 
-		connect(null);
+		connect();
 
 		verify(announcer, never()).announce(any(), anyList(), anyBoolean());
-	}
-
-	@Test
-	void theSocketIsScheduledToCloseWhenItsTokenExpires() {
-		when(announcer.audienceFor(ALICE)).thenReturn(List.of());
-		when(onlineUsers.onlineUserIds()).thenReturn(Set.of());
-
-		Instant expiresAt = Instant.now().plusSeconds(300);
-		connect(expiresAt);
-
-		// The handshake was the only moment the token was ever checked, so a
-		// five-minute credential bought a socket that lived as long as the tab.
-		verify(taskScheduler).schedule(any(Runnable.class), eq(expiresAt));
-	}
-
-	@Test
-	void aTokenWithNoExpirySchedulesNothing() {
-		when(announcer.audienceFor(ALICE)).thenReturn(List.of());
-		when(onlineUsers.onlineUserIds()).thenReturn(Set.of());
-
-		connect(null);
-
-		verify(taskScheduler, never()).schedule(any(Runnable.class), any(Instant.class));
 	}
 
 	@Test

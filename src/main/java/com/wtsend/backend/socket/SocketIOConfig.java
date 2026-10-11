@@ -69,12 +69,7 @@ public class SocketIOConfig {
 				if (user == null)
 					return AuthorizationResult.FAILED_AUTHORIZATION;
 
-				// The expiry travels with the id, because nothing downstream decodes
-				// the token again -- onConnect deliberately reuses this result. Without
-				// it the socket outlived its own credential: a token valid for five
-				// minutes bought a connection that stayed open for hours, and a
-				// password change could not reach it.
-				handshakeData.setAuthToken(new SocketAuth(userId, jwt.getExpiresAt()));
+				handshakeData.setAuthToken(userId);
 				log.info("Authorized: {}", jwt.getSubject());
 				return AuthorizationResult.SUCCESSFUL_AUTHORIZATION;
 
