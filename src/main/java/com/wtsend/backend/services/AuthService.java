@@ -195,6 +195,15 @@ public class AuthService implements IAuthService {
 	 * sign-in that is otherwise perfectly valid.
 	 */
 	private User withFreeUsername(User user) {
+		// Not a silent no-op for a null base, which is what this used to be:
+		// existsByUsername(null) is false, so the loop never ran and the user was
+		// saved with no username -- findable by nobody, and blank in their own
+		// profile. Every caller has a derived or provider-derived base now, so a
+		// null here is a path that forgot to set one.
+		if (user.getUsername() == null || user.getUsername().isBlank())
+			throw new AppException(ErrorCode.USERNAME_REQUIRED)
+					.withDetail("no username to start from for userId=" + user.getId());
+
 		String base = user.getUsername();
 		String candidate = base;
 
@@ -231,7 +240,11 @@ public class AuthService implements IAuthService {
 			// no reason to issue the INSERT before commit -- and a constraint
 			// violation raised at commit happens outside this try, where the catch
 			// below can do nothing with it.
-			savedUser = userRepository.saveAndFlush(userMapper.toUser(request));
+			// withFreeUsername because the username is derived from the email's
+			// local part, which is not unique: john@gmail.com and john@company.com
+			// both produce "john". Nothing asks the user for one, so nothing else
+			// would have settled that.
+			savedUser = userRepository.saveAndFlush(withFreeUsername(userMapper.toUser(request)));
 		} catch (DataIntegrityViolationException e) {
 			// The existsByEmail above is a check-then-insert, so two registrations
 			// for the same address landing together both passed it and the loser

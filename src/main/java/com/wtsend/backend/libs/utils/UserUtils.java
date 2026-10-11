@@ -39,19 +39,64 @@ public class UserUtils {
 	 * by the caller.
 	 */
 	public static String providerUsername(String prefix, String providerId) {
-		String candidate = prefix + providerId;
-		return candidate.length() <= MAX_USERNAME_LENGTH
-				? candidate
-				: candidate.substring(0, MAX_USERNAME_LENGTH);
+		return fitToUsernameRules(prefix + providerId);
 	}
 
-	/** Matches the @Size(max) on UpdateUserRequest.username. */
+	/**
+	 * A username derived from the address, for accounts nobody was asked to name
+	 * one for.
+	 *
+	 * <p>
+	 * {@code signUp} never set a username at all, so every password account had
+	 * NULL -- and the column is the only key {@code GET /users/search} accepts,
+	 * which means those accounts could not be found by anyone wanting to add
+	 * them as a friend. An empty profile field was the visible half of that.
+	 *
+	 * <p>
+	 * Only {@code [a-z0-9._-]} survives, because this value ends up in a query
+	 * string: a {@code +} in an email local part is legal and would arrive at
+	 * the server as a space. The result is not unique on its own -- two people
+	 * at different domains share a local part -- so the caller still has to put
+	 * it through {@code withFreeUsername}.
+	 */
+	public static String usernameFromEmail(String email) {
+		String localPart = email.substring(0, email.indexOf('@'))
+				.toLowerCase()
+				.replaceAll("[^a-z0-9._-]", "");
+
+		return fitToUsernameRules(localPart.isEmpty() ? "user" : localPart);
+	}
+
+	/**
+	 * Brings a candidate inside the bounds
+	 * {@link com.wtsend.backend.dto.request.UpdateUserRequest} enforces.
+	 *
+	 * <p>
+	 * Both ends matter, and the lower one is easy to forget: a username outside
+	 * 8-20 characters is stored happily and then rejected by the only endpoint
+	 * that can change it, so the user is locked out of saving their own profile
+	 * for ever. {@code a@example.com} yields a one-character local part, and a
+	 * Google subject id yields 28 characters with the prefix.
+	 */
+	private static String fitToUsernameRules(String candidate) {
+		if (candidate.length() > MAX_USERNAME_LENGTH)
+			return candidate.substring(0, MAX_USERNAME_LENGTH);
+
+		return candidate.length() >= MIN_USERNAME_LENGTH
+				? candidate
+				: candidate + "0".repeat(MIN_USERNAME_LENGTH - candidate.length());
+	}
+
+	/** Both match the @Size on UpdateUserRequest.username -- change them together. */
 	public static final int MAX_USERNAME_LENGTH = 20;
+	public static final int MIN_USERNAME_LENGTH = 8;
 
 	public User toUser(SignUpRequest request) {
 
 		return User.builder().password(passwordEncoder.encode(request.getPassword()))
 				.email(request.getEmail()).displayName(request.getEmail().split("@")[0])
+				// Derived, not left null. The caller settles collisions.
+				.username(usernameFromEmail(request.getEmail()))
 				.build();
 	}
 
