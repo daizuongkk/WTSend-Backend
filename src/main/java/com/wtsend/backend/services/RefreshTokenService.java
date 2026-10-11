@@ -21,7 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Refresh tokens: issued, rotated once, and revoked as a family when one is
- * replayed.
+ * replayed long enough after it was spent.
  *
  * <p>
  * This manages its Redis keys directly instead of going through a
@@ -32,13 +32,31 @@ import lombok.extern.slf4j.Slf4j;
  * token became two independent live chains. A repository cannot express
  * read-and-delete as one operation; a Lua script can.
  *
+ * <h2>The grace window, and why it has to exist</h2>
+ *
+ * Making rotation atomic turned that old race into a worse one. Two refreshes
+ * carrying the same cookie are completely ordinary -- two browser tabs both
+ * restoring a session on load, React re-running an effect, a socket reconnect
+ * overlapping a queued request -- and the second one is indistinguishable from
+ * a stolen token. Treating it as theft revoked the family, which deletes the
+ * successor the first call had just issued and handed the browser a cookie that
+ * was already dead. One page load logged the user out, permanently.
+ *
+ * <p>
+ * So a token spent within {@code jwt.refresh-token.replay-grace-seconds} gets a
+ * second successor in the same family instead of killing it. Past that window
+ * it is still treated as a replay and the family dies: a thief replaying a
+ * token they captured is essentially never inside a ten-second window, while
+ * two tabs of the same browser essentially always are.
+ *
  * <h2>Keys</h2>
  *
  * <pre>
  * rt:{token}      "{userId}|{familyId}|{issuedAtEpochSeconds}"
- * rtused:{token}  "{familyId}"  -- tombstone, so a replay is distinguishable
- *                                  from a token that never existed
- * rtfam:{family}  SET of the tokens ever issued in one chain
+ * rtused:{token}  "{userId}|{familyId}|{consumedAtEpochSeconds}" -- tombstone,
+ *                 so a replay is distinguishable from a token that never
+ *                 existed, and so the grace window can be measured
+ * rtfam:{family}  SET of the live tokens in one chain
  * pwdchg:{userId} epoch seconds of the last password change
  * </pre>
  *
@@ -77,42 +95,74 @@ public class RefreshTokenService {
 
 	/**
 	 * Consumes one token and issues its successor in the same family, as a single
-	 * operation.
+	 * operation -- or, for a token spent moments ago, issues a second successor
+	 * rather than treating the duplicate as theft.
 	 *
 	 * <p>
-	 * KEYS: rt:{token}, rtused:{token}. ARGV: token, newToken, ttlSeconds, now.
+	 * KEYS: rt:{token}, rtused:{token}. ARGV: token, newToken, ttlSeconds, now,
+	 * graceSeconds.
 	 */
 	private static final RedisScript<List> ROTATE = new DefaultRedisScript<>("""
-			local stored = redis.call('GET', KEYS[1])
-			if not stored then
-			  local family = redis.call('GET', KEYS[2])
-			  if family then
-			    return {'REUSED', '', family}
-			  end
-			  return {'INVALID', '', ''}
+			local token, successor = ARGV[1], ARGV[2]
+			local ttl, now, grace = tonumber(ARGV[3]), tonumber(ARGV[4]), tonumber(ARGV[5])
+
+			-- "{userId}|{familyId}|{epochSeconds}", the shape of both rt: and rtused:
+			local function parts(value)
+			  local first = string.find(value, '|', 1, true)
+			  local second = string.find(value, '|', first + 1, true)
+			  return string.sub(value, 1, first - 1),
+			         string.sub(value, first + 1, second - 1),
+			         tonumber(string.sub(value, second + 1))
 			end
 
-			local firstBar = string.find(stored, '|', 1, true)
-			local secondBar = string.find(stored, '|', firstBar + 1, true)
-			local userId = string.sub(stored, 1, firstBar - 1)
-			local family = string.sub(stored, firstBar + 1, secondBar - 1)
-			local issuedAt = tonumber(string.sub(stored, secondBar + 1))
+			-- A password change invalidates everything issued before it, wherever it
+			-- lives, without this process having to enumerate the user's tokens.
+			local function supersededByPasswordChange(userId, stamp)
+			  return stamp < tonumber(redis.call('GET', 'pwdchg:' .. userId) or '0')
+			end
 
-			-- A password change invalidates everything issued before it, wherever
-			-- it lives, without this process having to enumerate the user's tokens.
-			local changedAt = tonumber(redis.call('GET', 'pwdchg:' .. userId) or '0')
-			if issuedAt < changedAt then
+			local function issue(userId, family)
+			  redis.call('SET', 'rt:' .. successor, userId .. '|' .. family .. '|' .. now, 'EX', ttl)
+			  redis.call('SADD', 'rtfam:' .. family, successor)
+			  redis.call('EXPIRE', 'rtfam:' .. family, ttl)
+			  return {'OK', userId, family}
+			end
+
+			local stored = redis.call('GET', KEYS[1])
+
+			if not stored then
+			  local spent = redis.call('GET', KEYS[2])
+			  if not spent then
+			    return {'INVALID', '', ''}
+			  end
+
+			  local userId, family, consumedAt = parts(spent)
+
+			  -- Inside the window this is two tabs, not a thief. Strictly inside:
+			  -- these stamps are whole seconds, so `>` would make a grace of 0 still
+			  -- forgive anything landing in the same second, and 0 has to mean none.
+			  --
+			  -- The password check uses consumedAt rather than the original issuedAt,
+			  -- which the tombstone does not carry: at most the grace window of
+			  -- slack, and the successor issued below carries `now`, so the next
+			  -- rotation is exact.
+			  if now - consumedAt >= grace or supersededByPasswordChange(userId, consumedAt) then
+			    return {'REUSED', '', family}
+			  end
+
+			  return issue(userId, family)
+			end
+
+			local userId, family, issuedAt = parts(stored)
+			if supersededByPasswordChange(userId, issuedAt) then
 			  redis.call('DEL', KEYS[1])
 			  return {'INVALID', '', ''}
 			end
 
 			redis.call('DEL', KEYS[1])
-			redis.call('SET', KEYS[2], family, 'EX', ARGV[3])
-			redis.call('SET', 'rt:' .. ARGV[2], userId .. '|' .. family .. '|' .. ARGV[4], 'EX', ARGV[3])
-			redis.call('SREM', 'rtfam:' .. family, ARGV[1])
-			redis.call('SADD', 'rtfam:' .. family, ARGV[2])
-			redis.call('EXPIRE', 'rtfam:' .. family, ARGV[3])
-			return {'OK', userId, family}
+			redis.call('SET', KEYS[2], userId .. '|' .. family .. '|' .. now, 'EX', ttl)
+			redis.call('SREM', 'rtfam:' .. family, token)
+			return issue(userId, family)
 			""", List.class);
 
 	/** KEYS: rtfam:{family}. Returns how many tokens it removed. */
@@ -128,6 +178,14 @@ public class RefreshTokenService {
 
 	@Value("${jwt.refresh-token.ttl}")
 	private Long refreshTokenTtlDays;
+
+	/**
+	 * How long after a token is spent a second presentation of it still counts as
+	 * a duplicate rather than a replay. Seconds, and deliberately short: it has
+	 * to cover two tabs loading together, not a stolen cookie.
+	 */
+	@Value("${jwt.refresh-token.replay-grace-seconds:10}")
+	private long replayGraceSeconds;
 
 	private final StringRedisTemplate redis;
 	private final UserRepository userRepo;
@@ -166,9 +224,11 @@ public class RefreshTokenService {
 	 * Rotates a token and returns the user it belonged to plus the successor.
 	 *
 	 * <p>
-	 * A replayed token revokes its whole family and then fails like any invalid
-	 * one: the caller learns nothing about having tripped the detection, which is
-	 * deliberate -- the only one who should be able to tell is whoever reads the
+	 * A token presented again within the grace window gets its own successor, so
+	 * two tabs restoring the same session do not fight. Later than that it is a
+	 * replay: the whole family is revoked and the call then fails like any
+	 * invalid one, so the caller learns nothing about having tripped the
+	 * detection -- the only one who should be able to tell is whoever reads the
 	 * log.
 	 */
 	public RotatedSession rotate(String token) {
@@ -180,7 +240,8 @@ public class RefreshTokenService {
 		List<String> result = redis.execute(ROTATE,
 				List.of(TOKEN_KEY + token, USED_KEY + token),
 				token, successor, String.valueOf(ttlSeconds()),
-				String.valueOf(Instant.now().getEpochSecond()));
+				String.valueOf(Instant.now().getEpochSecond()),
+				String.valueOf(replayGraceSeconds));
 
 		Outcome outcome = result == null || result.isEmpty()
 				? Outcome.INVALID

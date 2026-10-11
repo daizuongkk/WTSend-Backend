@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.corundumstudio.socketio.SocketIOServer;
 import com.wtsend.backend.common.exception.AppException;
@@ -57,8 +58,20 @@ class RefreshTokenRotationTest {
 		createdUserIds.add(user.getId());
 	}
 
+	/**
+	 * Collapses the grace window for the tests that are about replay detection
+	 * rather than about two tabs. Reflection because the window is a
+	 * {@code @Value} field and the alternative is a second application context
+	 * for one number.
+	 */
+	private void withoutAGraceWindow() {
+		ReflectionTestUtils.setField(refreshTokenService, "replayGraceSeconds", 0L);
+	}
+
 	@AfterEach
 	void removeWhatThisTestWrote() {
+		// The context is shared, so the window has to go back however a test left it.
+		ReflectionTestUtils.setField(refreshTokenService, "replayGraceSeconds", 10L);
 		touchedKeys.forEach(redis::delete);
 		createdUserIds.forEach(id -> {
 			redis.delete("pwdchg:" + id);
@@ -92,7 +105,8 @@ class RefreshTokenRotationTest {
 	}
 
 	@Test
-	void theSameTokenCannotBeSpentTwice() {
+	void aTokenSpentOutsideTheGraceWindowCannotBeSpentAgain() {
+		withoutAGraceWindow();
 		IssuedRefreshToken first = issue();
 
 		var rotated = refreshTokenService.rotate(first.token());
@@ -108,7 +122,49 @@ class RefreshTokenRotationTest {
 	}
 
 	@Test
+	void twoTabsRefreshingTogetherBothGetAWorkingSession() {
+		IssuedRefreshToken shared = issue();
+
+		// Exactly what one page load does: two restores of the same session,
+		// carrying the same cookie, microseconds apart. Treating the second as
+		// theft revoked the family -- which deletes the successor the first call
+		// had just issued -- so one reload logged the user out for good.
+		var firstTab = refreshTokenService.rotate(shared.token());
+		var secondTab = refreshTokenService.rotate(shared.token());
+
+		for (var session : List.of(firstTab, secondTab)) {
+			touchedKeys.add("rt:" + session.refreshToken().token());
+			touchedKeys.add("rtused:" + session.refreshToken().token());
+			assertThat(session.user().getId()).isEqualTo(user.getId());
+			assertThat(redis.hasKey("rt:" + session.refreshToken().token())).isTrue();
+		}
+
+		assertThat(secondTab.refreshToken().token()).isNotEqualTo(firstTab.refreshToken().token());
+		// Same chain, so a genuine replay later still takes both down together.
+		assertThat(secondTab.refreshToken().familyId()).isEqualTo(shared.familyId());
+		assertThat(firstTab.refreshToken().familyId()).isEqualTo(shared.familyId());
+	}
+
+	@Test
+	void aPasswordChangeStillRefusesADuplicateInsideTheGraceWindow() {
+		IssuedRefreshToken shared = issue();
+		var firstTab = refreshTokenService.rotate(shared.token());
+		touchedKeys.add("rt:" + firstTab.refreshToken().token());
+		touchedKeys.add("rtused:" + firstTab.refreshToken().token());
+
+		// The window forgives a duplicate, not a credential the user has revoked.
+		redis.opsForValue().set("pwdchg:" + user.getId(),
+				String.valueOf(java.time.Instant.now().getEpochSecond() + 1));
+
+		assertThatThrownBy(() -> refreshTokenService.rotate(shared.token()))
+				.isInstanceOf(AppException.class)
+				.extracting(e -> ((AppException) e).getErrorCode())
+				.isEqualTo(ErrorCode.REFRESH_TOKEN_INVALID);
+	}
+
+	@Test
 	void replayingAConsumedTokenKillsTheWholeChain() {
+		withoutAGraceWindow();
 		IssuedRefreshToken first = issue();
 		var second = refreshTokenService.rotate(first.token()).refreshToken();
 		touchedKeys.add("rt:" + second.token());

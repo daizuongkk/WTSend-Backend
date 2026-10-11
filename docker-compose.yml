@@ -48,7 +48,6 @@ services:
       timeout: 3s
       retries: 5
 
-
   kafka:
     # KRaft built in, no ZooKeeper, no Confluent licence. Pinned: the image's
     # environment contract has changed between releases, and this one needs
