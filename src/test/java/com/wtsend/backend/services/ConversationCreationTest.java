@@ -143,6 +143,21 @@ class ConversationCreationTest {
 	}
 
 	@Test
+	void aDirectConversationIsAnnouncedToo() {
+		aliceIsFriendsWith(List.of(bob));
+		when(conversationRepo.findByDirectKey(any())).thenReturn(Optional.empty());
+		when(conversationRepo.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+		when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
+
+		conversationService.createConversation(request(ConversationType.DIRECT, List.of(BOB)), ALICE);
+
+		// Only GROUP used to be published, so a DIRECT thread created and left
+		// without a message reached the other person on their next full load and
+		// not before: the first-message path that normally covers it had not run.
+		verify(eventPublisher).publishEvent(any(ConversationCreatedEvent.class));
+	}
+
+	@Test
 	void aGroupOfRealFriendsIsStillCreated() {
 		aliceIsFriendsWith(List.of(bob));
 		when(conversationRepo.save(any())).thenAnswer(invocation -> invocation.getArgument(0));

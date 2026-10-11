@@ -103,14 +103,16 @@ public class ConversationService implements IConversationService {
 
 		ConversationResponse response = conversationMapper.toResponse(conversation);
 
-		if (type.equals(ConversationType.GROUP)) {
-			// Every participant, creator included: memberIds leaves the creator out,
-			// so their other tabs and devices never heard about the new group.
-			List<String> recipients = conversation.getParticipants().stream()
-					.map(participant -> participant.getUser().getId())
-					.toList();
-			eventPublisher.publishEvent(new ConversationCreatedEvent(response, recipients));
-		}
+		// Both types, not just GROUP. A DIRECT conversation created here and left
+		// without a message reached the other person only on their next full
+		// load: nothing was published, and the first-message path that normally
+		// covers it had not run. Every participant, creator included -- memberIds
+		// leaves the creator out, so their other tabs and devices never heard
+		// about it either.
+		List<String> recipients = conversation.getParticipants().stream()
+				.map(participant -> participant.getUser().getId())
+				.toList();
+		eventPublisher.publishEvent(new ConversationCreatedEvent(response, recipients));
 
 		return response;
 	}
