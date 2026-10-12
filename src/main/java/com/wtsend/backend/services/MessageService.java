@@ -7,7 +7,7 @@ import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.DeadlockLoserDataAccessException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.retry.annotation.Backoff;
@@ -50,191 +50,180 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MessageService implements IMessageService {
 
-	ConversationMapper conversationMapper;
-	UserRepository userRepository;
-	ConversationRepository conversationRepo;
-	MessageRepository messageRepo;
-	FriendRepository friendRepo;
-	MessageMapper messageMapper;
-	ParticipantRepository participantRepo;
-	ApplicationEventPublisher applicationEventPublisher;
+  ConversationMapper conversationMapper;
+  UserRepository userRepository;
+  ConversationRepository conversationRepo;
+  MessageRepository messageRepo;
+  FriendRepository friendRepo;
+  MessageMapper messageMapper;
+  ParticipantRepository participantRepo;
+  ApplicationEventPublisher applicationEventPublisher;
 
-	@Override
-	@Retryable(retryFor = { CannotAcquireLockException.class,
-			DeadlockLoserDataAccessException.class,
-			// Losing the direct_key race: a retry re-reads and finds the winner.
-			// Retry advice sits outside the transaction advice, so each attempt
-			// gets a fresh transaction rather than reusing a rollback-only one.
-			DataIntegrityViolationException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
-	public MessageResponse sendDirectMessage(SendDirectMessageRequest request, String senderId) {
+  @Override
+  @Retryable(retryFor = { CannotAcquireLockException.class,
+      PessimisticLockingFailureException.class,
+      // Losing the direct_key race: a retry re-reads and finds the winner.
+      // Retry advice sits outside the transaction advice, so each attempt
+      // gets a fresh transaction rather than reusing a rollback-only one.
+      DataIntegrityViolationException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
+  public MessageResponse sendDirectMessage(SendDirectMessageRequest request, String senderId) {
 
-		String recipientId = request.getRecipientId();
+    String recipientId = request.getRecipientId();
 
-		if (!friendRepo.existsFriendship(senderId, recipientId))
-			throw new AppException(ErrorCode.NOT_FRIENDS).withDetail("recipientId=" + recipientId);
+    if (!friendRepo.existsFriendship(senderId, recipientId))
+      throw new AppException(ErrorCode.NOT_FRIENDS).withDetail("recipientId=" + recipientId);
 
-		User recipient = userRepository.findById(recipientId)
-				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + recipientId));
+    User recipient = userRepository.findById(recipientId)
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + recipientId));
 
-		User sender = userRepository.findById(senderId)
-				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + senderId));
+    User sender = userRepository.findById(senderId)
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + senderId));
 
-		Long requestedId = request.getConversationId();
+    Long requestedId = request.getConversationId();
 
-		Conversation conversation;
-		if (requestedId == null) {
-			// First message to this friend -- the client has no conversation id yet.
-			// Look the pair's thread up before creating one: without this, a client
-			// that lost its local state would start a second DIRECT conversation and
-			// the two users would each be reading a different half of the thread.
-			//
-			// This check still loses a genuine race, so the unique index on
-			// direct_key is the real arbiter: the loser's insert fails, @Retryable
-			// runs the whole method again in a fresh transaction, and the lookup
-			// then finds the winner's conversation.
-			conversation = conversationRepo
-					.findByDirectKey(Conversation.directKeyOf(senderId, recipientId))
-					.orElseGet(() -> conversationRepo.save(createNewDirectConversation(sender, recipient)));
-		} else {
-			// The conversation id comes from the client and is not covered by the
-			// friendship check above, so verify it really is this pair's thread.
-			// WithGraph because checkMembership walks the participants and their
-			// users: a plain findById made that a lazy load per participant.
-			Conversation existing = conversationRepo.findByIdWithGraph(requestedId)
-					.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND)
-							.withDetail("id=" + requestedId));
-			if (existing.getType() != ConversationType.DIRECT)
-				throw new AppException(ErrorCode.CONVERSATION_INVALID_TYPE);
-			MessageHelper.checkMembership(existing, sender);
-			MessageHelper.checkMembership(existing, recipient);
-			conversation = existing;
-		}
+    Conversation conversation;
+    if (requestedId == null) {
 
-		Message message = Message.builder().sender(sender).conversation(conversation)
-				.content(request.getContent()).imgUrl(request.getImgUrl()).build();
-		messageRepo.save(message);
+      conversation = conversationRepo
+          .findByDirectKey(Conversation.directKeyOf(senderId, recipientId))
+          .orElseGet(() -> conversationRepo.save(createNewDirectConversation(sender, recipient)));
+    } else {
 
-		return publishNewMessage(conversation, message, senderId);
-	}
+      Conversation existing = conversationRepo.findByIdWithGraph(requestedId)
+          .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND)
+              .withDetail("id=" + requestedId));
+      if (existing.getType() != ConversationType.DIRECT)
+        throw new AppException(ErrorCode.CONVERSATION_INVALID_TYPE);
+      MessageHelper.checkMembership(existing, sender);
+      MessageHelper.checkMembership(existing, recipient);
+      conversation = existing;
+    }
 
-	private Conversation createNewDirectConversation(User sender, User recipient) {
-		Conversation convo = new Conversation();
-		convo.setType(ConversationType.DIRECT);
+    Message message = Message.builder().sender(sender).conversation(conversation)
+        .content(request.getContent()).imgUrl(request.getImgUrl()).build();
+    messageRepo.save(message);
 
-		Participant p1 = new Participant();
-		p1.setUser(sender);
-		p1.setConversation(convo);
-		p1.setUnreadCounts(0L);
+    return publishNewMessage(conversation, message, senderId);
+  }
 
-		Participant p2 = new Participant();
-		p2.setUser(recipient);
-		p2.setConversation(convo);
-		p2.setUnreadCounts(0L);
+  private Conversation createNewDirectConversation(User sender, User recipient) {
+    Conversation convo = new Conversation();
+    convo.setType(ConversationType.DIRECT);
 
-		convo.setDirectKey(Conversation.directKeyOf(sender.getId(), recipient.getId()));
-		convo.setParticipants(new ArrayList<>(List.of(p1, p2)));
-		convo.setLastMessageAt(Instant.now());
+    Participant p1 = new Participant();
+    p1.setUser(sender);
+    p1.setConversation(convo);
+    p1.setUnreadCounts(0L);
 
-		return convo;
-	}
+    Participant p2 = new Participant();
+    p2.setUser(recipient);
+    p2.setConversation(convo);
+    p2.setUnreadCounts(0L);
 
-	@Override
-	@Retryable(retryFor = { CannotAcquireLockException.class,
-			DeadlockLoserDataAccessException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
-	public MessageResponse sendGroupMessage(SendGroupMessageRequest request, String senderId) {
-		Long conversationId = request.getConversationId();
+    convo.setDirectKey(Conversation.directKeyOf(sender.getId(), recipient.getId()));
+    convo.setParticipants(new ArrayList<>(List.of(p1, p2)));
+    convo.setLastMessageAt(Instant.now());
 
-		// WithGraph because checkMembership walks the participants and their users,
-		// and a group is where that N+1 actually hurt.
-		Conversation conversation = conversationRepo.findByIdWithGraph(conversationId)
-				.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND).withDetail("id=" + conversationId));
+    return convo;
+  }
 
-		if (!conversation.getType().equals(ConversationType.GROUP))
-			throw new AppException(ErrorCode.CONVERSATION_INVALID_TYPE);
+  @Override
+  @Retryable(retryFor = { CannotAcquireLockException.class,
+      PessimisticLockingFailureException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
+  public MessageResponse sendGroupMessage(SendGroupMessageRequest request, String senderId) {
+    Long conversationId = request.getConversationId();
 
-		User sender = userRepository.findById(senderId)
-				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + senderId));
+    // WithGraph because checkMembership walks the participants and their users,
+    // and a group is where that N+1 actually hurt.
+    Conversation conversation = conversationRepo.findByIdWithGraph(conversationId)
+        .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND).withDetail("id=" + conversationId));
 
-		MessageHelper.checkMembership(conversation, sender);
+    if (!conversation.getType().equals(ConversationType.GROUP))
+      throw new AppException(ErrorCode.CONVERSATION_INVALID_TYPE);
 
-		Message message = Message.builder().sender(sender).conversation(conversation).content(request.getContent())
-				.imgUrl(request.getImgUrl()).build();
-		messageRepo.save(message);
+    User sender = userRepository.findById(senderId)
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + senderId));
 
-		return publishNewMessage(conversation, message, senderId);
-	}
+    MessageHelper.checkMembership(conversation, sender);
 
-	/**
-	 * Applies the counter updates as atomic SQL, then maps the conversation from
-	 * a fresh read and hands the DTOs to the AFTER_COMMIT listener.
-	 *
-	 * <p>
-	 * The order matters and used to be the other way round. Mapping first meant
-	 * {@code ParticipantResponse.unreadCounts} was always one increment behind --
-	 * permanently, for every message: the recipient's {@code new-message} payload
-	 * said 0 when the row said 1, and said 9 on the tenth message. A client that
-	 * trusted the payload showed no badge until the next full reload.
-	 *
-	 * <p>
-	 * The message DTOs are still mapped first, because the bulk updates below
-	 * clear the persistence context and {@code message} would be detached with
-	 * lazy associations after them.
-	 */
-	private MessageResponse publishNewMessage(Conversation conversation, Message message, String senderId) {
-		MessageResponse messageDto = messageMapper.toResponse(message);
-		LastMessage lastMessageDto = messageMapper.toLastMessage(message);
-		Instant sentAt = message.getCreatedAt();
+    Message message = Message.builder().sender(sender).conversation(conversation).content(request.getContent())
+        .imgUrl(request.getImgUrl()).build();
+    messageRepo.save(message);
 
-		Long conversationId = conversation.getId();
-		conversationRepo.updateLastMessage(conversationId, sentAt, message.getId());
-		participantRepo.incrementUnreadCountsForOthers(conversationId, senderId);
-		participantRepo.resetUnreadCountForSender(conversationId, senderId);
+    return publishNewMessage(conversation, message, senderId);
+  }
 
-		// Re-read after the counters, with the graph the mapper walks.
-		ConversationResponse conversationDto = conversationMapper.toResponse(
-				conversationRepo.findByIdWithGraph(conversationId)
-						.orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND)
-								.withDetail("id=" + conversationId)));
-		conversationDto.setLastMessage(lastMessageDto);
-		conversationDto.setLastMessageAt(sentAt);
+  /**
+   * Applies the counter updates as atomic SQL, then maps the conversation from
+   * a fresh read and hands the DTOs to the AFTER_COMMIT listener.
+   *
+   * <p>
+   * The order matters and used to be the other way round. Mapping first meant
+   * {@code ParticipantResponse.unreadCounts} was always one increment behind --
+   * permanently, for every message: the recipient's {@code new-message} payload
+   * said 0 when the row said 1, and said 9 on the tenth message. A client that
+   * trusted the payload showed no badge until the next full reload.
+   *
+   * <p>
+   * The message DTOs are still mapped first, because the bulk updates below
+   * clear the persistence context and {@code message} would be detached with
+   * lazy associations after them.
+   */
+  private MessageResponse publishNewMessage(Conversation conversation, Message message, String senderId) {
+    MessageResponse messageDto = messageMapper.toResponse(message);
+    LastMessage lastMessageDto = messageMapper.toLastMessage(message);
+    Instant sentAt = message.getCreatedAt();
 
-		applicationEventPublisher.publishEvent(new NewMessageEvent(conversationDto, messageDto));
+    Long conversationId = conversation.getId();
+    conversationRepo.updateLastMessage(conversationId, sentAt, message.getId());
+    participantRepo.incrementUnreadCountsForOthers(conversationId, senderId);
+    participantRepo.resetUnreadCountForSender(conversationId, senderId);
 
-		// Returned to the sender so the client can swap its optimistic bubble for the
-		// real row. Without an id it had to guess which echo belonged to which send.
-		return messageDto;
-	}
+    // Re-read after the counters, with the graph the mapper walks.
+    ConversationResponse conversationDto = conversationMapper.toResponse(
+        conversationRepo.findByIdWithGraph(conversationId)
+            .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND)
+                .withDetail("id=" + conversationId)));
+    conversationDto.setLastMessage(lastMessageDto);
+    conversationDto.setLastMessageAt(sentAt);
 
-	@Override
-	@Transactional(readOnly = true)
-	public MessagesResponse getMessages(Long conversationId, String userId, int limit, String cursor) {
+    applicationEventPublisher.publishEvent(new NewMessageEvent(conversationDto, messageDto));
 
-		if (participantRepo.findByConversationIdAndUserId(conversationId, userId).isEmpty())
-			throw new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED)
-					.withDetail("conversationId=" + conversationId + " userId=" + userId);
+    // Returned to the sender so the client can swap its optimistic bubble for the
+    // real row. Without an id it had to guess which echo belonged to which send.
+    return messageDto;
+  }
 
-		MessageCursor position = MessageCursor.parse(cursor);
-		Pageable pageable = PageRequest.of(0, limit + 1);
-		List<Message> messages = position != null
-				? messageRepo.findPageOlderThan(conversationId, position.createdAt(), position.id(), pageable)
-				: messageRepo.findNewestPage(conversationId, pageable);
+  @Override
+  @Transactional(readOnly = true)
+  public MessagesResponse getMessages(Long conversationId, String userId, int limit, String cursor) {
 
-		String nextCursor = null;
+    if (participantRepo.findByConversationIdAndUserId(conversationId, userId).isEmpty())
+      throw new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED)
+          .withDetail("conversationId=" + conversationId + " userId=" + userId);
 
-		if (messages.size() > limit) {
-			// Drop the probe row, then take the cursor from the last row we KEPT --
-			// the next page queries strictly before the cursor, so using the probe
-			// row would skip it permanently.
-			messages = new ArrayList<>(messages.subList(0, limit));
-			Message oldestKept = messages.get(limit - 1);
-			nextCursor = new MessageCursor(oldestKept.getCreatedAt(), oldestKept.getId()).encode();
-		}
+    MessageCursor position = MessageCursor.parse(cursor);
+    Pageable pageable = PageRequest.of(0, limit + 1);
+    List<Message> messages = position != null
+        ? messageRepo.findPageOlderThan(conversationId, position.createdAt(), position.id(), pageable)
+        : messageRepo.findNewestPage(conversationId, pageable);
 
-		List<MessageResponse> messageResponses = messages.reversed().stream()
-				.map(messageMapper::toResponse)
-				.toList();
+    String nextCursor = null;
 
-		return MessagesResponse.builder().messages(messageResponses).nextCursor(nextCursor).build();
-	}
+    if (messages.size() > limit) {
+      // Drop the probe row, then take the cursor from the last row we KEPT --
+      // the next page queries strictly before the cursor, so using the probe
+      // row would skip it permanently.
+      messages = new ArrayList<>(messages.subList(0, limit));
+      Message oldestKept = messages.get(limit - 1);
+      nextCursor = new MessageCursor(oldestKept.getCreatedAt(), oldestKept.getId()).encode();
+    }
+
+    List<MessageResponse> messageResponses = messages.reversed().stream()
+        .map(messageMapper::toResponse)
+        .toList();
+
+    return MessagesResponse.builder().messages(messageResponses).nextCursor(nextCursor).build();
+  }
 
 }
