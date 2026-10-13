@@ -38,3 +38,4 @@ src/main/resources/certs
 src/main/resources/application-local.properties
 
 keypair.pem
+CLAUDE.md
