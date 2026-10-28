@@ -1,5 +1,7 @@
 package com.wtsend.backend.dto.response;
 
+import java.util.UUID;
+
 import lombok.Builder;
 import lombok.Getter;
 
@@ -20,8 +22,8 @@ import lombok.Getter;
 @Getter
 @Builder
 public class UserSummaryResponse {
-	private String id;
-	private String username;
-	private String displayName;
-	private String avatarUrl;
+  private UUID id;
+  private String username;
+  private String displayName;
+  private String avatarUrl;
 }

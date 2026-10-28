@@ -1,6 +1,7 @@
 package com.wtsend.backend.model;
 
 import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.data.annotation.Id;
@@ -21,14 +22,14 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class EmailVerificationToken {
-	@Id
-	private String token;
+  @Id
+  private String token;
 
-	@Indexed
-	private String userId;
+  @Indexed
+  private UUID userId;
 
-	@TimeToLive(unit = TimeUnit.MINUTES)
-	private Long expiresIn;
+  @TimeToLive(unit = TimeUnit.MINUTES)
+  private Long expiresIn;
 
-	private Instant cooldownUntil;
+  private Instant cooldownUntil;
 }

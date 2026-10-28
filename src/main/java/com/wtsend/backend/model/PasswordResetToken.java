@@ -1,6 +1,7 @@
 package com.wtsend.backend.model;
 
 import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.data.annotation.Id;
@@ -31,19 +32,19 @@ import lombok.Setter;
 @AllArgsConstructor
 public class PasswordResetToken {
 
-	public static final long TTL_MINUTES = 30L;
+  public static final long TTL_MINUTES = 30L;
 
-	/** How long before another reset mail may be requested for the same user. */
-	public static final long COOLDOWN_SECONDS = 30L;
+  /** How long before another reset mail may be requested for the same user. */
+  public static final long COOLDOWN_SECONDS = 30L;
 
-	@Id
-	private String token;
+  @Id
+  private String token;
 
-	@Indexed
-	private String userId;
+  @Indexed
+  private UUID userId;
 
-	@TimeToLive(unit = TimeUnit.MINUTES)
-	private Long expiresIn;
+  @TimeToLive(unit = TimeUnit.MINUTES)
+  private Long expiresIn;
 
-	private Instant cooldownUntil;
+  private Instant cooldownUntil;
 }

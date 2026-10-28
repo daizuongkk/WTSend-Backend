@@ -2,6 +2,7 @@ package com.wtsend.backend.controllers;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,40 +24,40 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/friend-requests")
 public class FriendRequestController {
 
-	private final IFriendRequestService friendRequestService;
+  private final IFriendRequestService friendRequestService;
 
-	FriendRequestController(IFriendRequestService friendRequestService) {
-		this.friendRequestService = friendRequestService;
-	}
+  FriendRequestController(IFriendRequestService friendRequestService) {
+    this.friendRequestService = friendRequestService;
+  }
 
-	@PostMapping("")
-	public ResponseEntity<String> sendFriendRequest(@RequestBody @Valid AddFriendRequest request,
-			@AuthenticationPrincipal Jwt jwt) {
+  @PostMapping("")
+  public ResponseEntity<String> sendFriendRequest(@RequestBody @Valid AddFriendRequest request,
+      @AuthenticationPrincipal Jwt jwt) {
 
-		friendRequestService.sendFriendRequest(jwt.getSubject(), request);
-		return ResponseEntity.ok("send friend request successfully");
-	}
+    friendRequestService.sendFriendRequest(UUID.fromString(jwt.getSubject()), request);
+    return ResponseEntity.ok("send friend request successfully");
+  }
 
-	@PostMapping("/{id}/accept")
-	public ResponseEntity<String> acceptFriendRequest(@PathVariable(name = "id") Long id,
-			@AuthenticationPrincipal Jwt jwt) {
+  @PostMapping("/{id}/accept")
+  public ResponseEntity<String> acceptFriendRequest(@PathVariable(name = "id") Long id,
+      @AuthenticationPrincipal Jwt jwt) {
 
-		friendRequestService.acceptFriendRequest(jwt.getSubject(), id);
+    friendRequestService.acceptFriendRequest(UUID.fromString(jwt.getSubject()), id);
 
-		return ResponseEntity.ok("accept friend successfully");
-	}
+    return ResponseEntity.ok("accept friend successfully");
+  }
 
-	@PostMapping("/{id}/reject")
-	public ResponseEntity<String> rejectFriendRequest(@PathVariable(name = "id") Long id,
-			@AuthenticationPrincipal Jwt jwt) {
+  @PostMapping("/{id}/reject")
+  public ResponseEntity<String> rejectFriendRequest(@PathVariable(name = "id") Long id,
+      @AuthenticationPrincipal Jwt jwt) {
 
-		friendRequestService.rejectFriendRequest(jwt.getSubject(), id);
-		return ResponseEntity.ok("reject friend");
-	}
+    friendRequestService.rejectFriendRequest(UUID.fromString(jwt.getSubject()), id);
+    return ResponseEntity.ok("reject friend");
+  }
 
-	@GetMapping()
-	public ResponseEntity<Map<String, List<FriendRequestResponse>>> getFriendRequests(@AuthenticationPrincipal Jwt jwt) {
+  @GetMapping()
+  public ResponseEntity<Map<String, List<FriendRequestResponse>>> getFriendRequests(@AuthenticationPrincipal Jwt jwt) {
 
-		return ResponseEntity.ok(friendRequestService.getFriendRequests(jwt.getSubject()));
-	}
+    return ResponseEntity.ok(friendRequestService.getFriendRequests(jwt.getSubject()));
+  }
 }

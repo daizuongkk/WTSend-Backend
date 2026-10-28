@@ -1,6 +1,7 @@
 package com.wtsend.backend.controllers;
 
 import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +30,7 @@ public class EmailController {
   @PostMapping("/send-verify-email")
   public ResponseEntity<Map<String, String>> resendVerifyEmail(@AuthenticationPrincipal Jwt jwt) {
 
-    emailService.sendVerifyLink(jwt.getSubject());
+    emailService.sendVerifyLink(UUID.fromString(jwt.getSubject()));
     return ResponseEntity.ok(Map.of("message", "resend verification email successfully"));
   }
 

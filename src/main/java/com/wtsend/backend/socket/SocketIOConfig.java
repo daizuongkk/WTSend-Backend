@@ -1,5 +1,7 @@
 package com.wtsend.backend.socket;
 
+import java.util.UUID;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -24,82 +26,82 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SocketIOConfig {
 
-	private final SocketIOProperties properties;
+  private final SocketIOProperties properties;
 
-	private final JwtDecoder jwtDecoder;
+  private final JwtDecoder jwtDecoder;
 
-	private final UserService userService;
+  private final UserService userService;
 
-	@Bean
-	public SocketIOServer socketIOServer() {
-		com.corundumstudio.socketio.Configuration config = new com.corundumstudio.socketio.Configuration();
-		config.setJsonSupport(new JacksonJsonSupport() {
-			@Override
-			protected void init(ObjectMapper objectMapper) {
-				super.init(objectMapper);
-				SocketJson.configure(objectMapper);
-			}
-		});
-		config.setHostname(properties.getHost());
-		config.setPort(properties.getPort());
-		config.setOrigin(properties.getOrigin());
-		config.setBossThreads(properties.getBossCount());
-		config.setWorkerThreads(properties.getWorkerCount());
-		config.setAllowCustomRequests(properties.getAllowCustomRequests());
-		config.setUpgradeTimeout(properties.getUpgradeTimeout());
-		config.setPingTimeout(properties.getPingTimeout());
-		config.setPingInterval(properties.getPingInterval());
-		config.setMaxFramePayloadLength(properties.getMaxFramePayloadLength());
-		config.setMaxHttpContentLength(properties.getMaxHttpContentLength());
-		config.setAuthorizationListener(handshakeData -> {
-			String token = handshakeData.getSingleUrlParam("token");
-			if (token == null || token.isEmpty()) {
-				log.warn("No token provided from: {}",
-						handshakeData.getAddress());
-				return AuthorizationResult.FAILED_AUTHORIZATION;
-			}
+  @Bean
+  public SocketIOServer socketIOServer() {
+    com.corundumstudio.socketio.Configuration config = new com.corundumstudio.socketio.Configuration();
+    config.setJsonSupport(new JacksonJsonSupport() {
+      @Override
+      protected void init(ObjectMapper objectMapper) {
+        super.init(objectMapper);
+        SocketJson.configure(objectMapper);
+      }
+    });
+    config.setHostname(properties.getHost());
+    config.setPort(properties.getPort());
+    config.setOrigin(properties.getOrigin());
+    config.setBossThreads(properties.getBossCount());
+    config.setWorkerThreads(properties.getWorkerCount());
+    config.setAllowCustomRequests(properties.getAllowCustomRequests());
+    config.setUpgradeTimeout(properties.getUpgradeTimeout());
+    config.setPingTimeout(properties.getPingTimeout());
+    config.setPingInterval(properties.getPingInterval());
+    config.setMaxFramePayloadLength(properties.getMaxFramePayloadLength());
+    config.setMaxHttpContentLength(properties.getMaxHttpContentLength());
+    config.setAuthorizationListener(handshakeData -> {
+      String token = handshakeData.getSingleUrlParam("token");
+      if (token == null || token.isEmpty()) {
+        log.warn("No token provided from: {}",
+            handshakeData.getAddress());
+        return AuthorizationResult.FAILED_AUTHORIZATION;
+      }
 
-			try {
-				Jwt jwt = jwtDecoder.decode(token);
+      try {
+        Jwt jwt = jwtDecoder.decode(token);
 
-				String userId = jwt.getSubject();
+        String userId = jwt.getSubject();
 
-				UserResponse user = userService.findById(userId);
+        UserResponse user = userService.findById(UUID.fromString(userId));
 
-				if (user == null)
-					return AuthorizationResult.FAILED_AUTHORIZATION;
+        if (user == null)
+          return AuthorizationResult.FAILED_AUTHORIZATION;
 
-				handshakeData.setAuthToken(userId);
-				log.info("Authorized: {}", jwt.getSubject());
-				return AuthorizationResult.SUCCESSFUL_AUTHORIZATION;
+        handshakeData.setAuthToken(userId);
+        log.info("Authorized: {}", jwt.getSubject());
+        return AuthorizationResult.SUCCESSFUL_AUTHORIZATION;
 
-			} catch (Exception e) {
-				log.error("Invalid token from: {}",
-						handshakeData.getAddress());
-				return AuthorizationResult.FAILED_AUTHORIZATION;
-			}
-		});
+      } catch (Exception e) {
+        log.error("Invalid token from: {}",
+            handshakeData.getAddress());
+        return AuthorizationResult.FAILED_AUTHORIZATION;
+      }
+    });
 
-		return new SocketIOServer(config);
-	}
+    return new SocketIOServer(config);
+  }
 
-	@Bean
-	public SpringAnnotationScanner springAnnotationScanner(SocketIOServer server) {
-		return new SpringAnnotationScanner(server);
-	}
+  @Bean
+  public SpringAnnotationScanner springAnnotationScanner(SocketIOServer server) {
+    return new SpringAnnotationScanner(server);
+  }
 
-	/**
-	 * Subscribes this instance to the relay channel. Boot autoconfigures a Redis
-	 * connection factory but no listener container, so without this the relay
-	 * would publish and nobody would be listening -- and the symptom would be
-	 * silence on the other instance, not an error here.
-	 */
-	@Bean
-	public RedisMessageListenerContainer socketRelayContainer(
-			RedisConnectionFactory connectionFactory, SocketRelay relay) {
-		RedisMessageListenerContainer container = new RedisMessageListenerContainer();
-		container.setConnectionFactory(connectionFactory);
-		container.addMessageListener(relay, new ChannelTopic(SocketRelay.CHANNEL));
-		return container;
-	}
+  /**
+   * Subscribes this instance to the relay channel. Boot autoconfigures a Redis
+   * connection factory but no listener container, so without this the relay
+   * would publish and nobody would be listening -- and the symptom would be
+   * silence on the other instance, not an error here.
+   */
+  @Bean
+  public RedisMessageListenerContainer socketRelayContainer(
+      RedisConnectionFactory connectionFactory, SocketRelay relay) {
+    RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+    container.setConnectionFactory(connectionFactory);
+    container.addMessageListener(relay, new ChannelTopic(SocketRelay.CHANNEL));
+    return container;
+  }
 }

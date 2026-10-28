@@ -32,22 +32,22 @@ import java.util.UUID;
  *                   send can be lined up with the signup that asked for it
  */
 public record EmailRequestedEvent(
-		String eventId,
-		Instant occurredAt,
-		int version,
-		String traceId,
-		EmailKind kind,
-		String userId) {
+    UUID eventId,
+    Instant occurredAt,
+    int version,
+    String traceId,
+    EmailKind kind,
+    UUID userId) {
 
-	public static final int CURRENT_VERSION = 1;
+  public static final int CURRENT_VERSION = 1;
 
-	public enum EmailKind {
-		VERIFY_LINK,
-		PASSWORD_RESET
-	}
+  public enum EmailKind {
+    VERIFY_LINK,
+    PASSWORD_RESET
+  }
 
-	public static EmailRequestedEvent of(EmailKind kind, String userId, String traceId) {
-		return new EmailRequestedEvent(UUID.randomUUID().toString(), Instant.now(),
-				CURRENT_VERSION, traceId, kind, userId);
-	}
+  public static EmailRequestedEvent of(EmailKind kind, UUID userId, String traceId) {
+    return new EmailRequestedEvent(UUID.randomUUID(), Instant.now(),
+        CURRENT_VERSION, traceId, kind, userId);
+  }
 }

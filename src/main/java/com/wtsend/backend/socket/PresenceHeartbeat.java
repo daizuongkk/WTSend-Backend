@@ -1,5 +1,7 @@
 package com.wtsend.backend.socket;
 
+import java.util.UUID;
+
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -26,39 +28,41 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class PresenceHeartbeat {
 
-	/** Comfortably inside RedisPresenceStore.ONLINE_TTL, so one miss is survivable. */
-	static final long INTERVAL_MS = 30_000;
+  /**
+   * Comfortably inside RedisPresenceStore.ONLINE_TTL, so one miss is survivable.
+   */
+  static final long INTERVAL_MS = 30_000;
 
-	private final SocketIOServer server;
-	private final RedisPresenceStore presence;
-	private final PresenceAnnouncer announcer;
+  private final SocketIOServer server;
+  private final RedisPresenceStore presence;
+  private final PresenceAnnouncer announcer;
 
-	@Scheduled(fixedDelay = INTERVAL_MS, initialDelay = INTERVAL_MS)
-	public void beat() {
-		try {
-			for (SocketIOClient client : server.getAllClients()) {
-				UserResponse user = client.get("user");
-				if (user != null)
-					// The visibility flag is what stops a hidden user being put back
-					// in the list by their own heartbeat -- and what lets a visible
-					// one come back after a prune that was only ever about liveness.
-					presence.touch(user.getId(), user.isShowOnlineStatus());
-			}
-			// Whoever fell out of the list has to be announced. This is the only
-			// moment anyone learns that an instance died without running its
-			// disconnect handlers -- a page already open never re-reads the
-			// list, so without this it shows a vanished user as online until it
-			// is reloaded.
-			for (String userId : presence.pruneStale()) {
-				log.info("Presence expired for {}, announcing offline", userId);
-				// Their socket is gone, so there is no cached audience to read --
-				// the announcer looks it up.
-				announcer.announce(userId, false);
-			}
-		} catch (Exception e) {
-			// A scheduled method that throws is not rescheduled on some
-			// configurations, which would freeze presence for this instance.
-			log.error("Presence heartbeat failed", e);
-		}
-	}
+  @Scheduled(fixedDelay = INTERVAL_MS, initialDelay = INTERVAL_MS)
+  public void beat() {
+    try {
+      for (SocketIOClient client : server.getAllClients()) {
+        UserResponse user = client.get("user");
+        if (user != null)
+          // The visibility flag is what stops a hidden user being put back
+          // in the list by their own heartbeat -- and what lets a visible
+          // one come back after a prune that was only ever about liveness.
+          presence.touch(user.getId(), user.isShowOnlineStatus());
+      }
+      // Whoever fell out of the list has to be announced. This is the only
+      // moment anyone learns that an instance died without running its
+      // disconnect handlers -- a page already open never re-reads the
+      // list, so without this it shows a vanished user as online until it
+      // is reloaded.
+      for (UUID userId : presence.pruneStale()) {
+        log.info("Presence expired for {}, announcing offline", userId);
+        // Their socket is gone, so there is no cached audience to read --
+        // the announcer looks it up.
+        announcer.announce(userId, false);
+      }
+    } catch (Exception e) {
+      // A scheduled method that throws is not rescheduled on some
+      // configurations, which would freeze presence for this instance.
+      log.error("Presence heartbeat failed", e);
+    }
+  }
 }

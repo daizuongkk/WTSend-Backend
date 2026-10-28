@@ -3,18 +3,19 @@ package com.wtsend.backend.services;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.wtsend.backend.dto.request.UpdateUserRequest;
-import com.wtsend.backend.event.OnlineVisibilityChangedEvent;
-import com.wtsend.backend.dto.response.UserResponse;
-import com.wtsend.backend.dto.response.UserSummaryResponse;
 import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
+import com.wtsend.backend.dto.request.UpdateUserRequest;
+import com.wtsend.backend.dto.response.UserResponse;
+import com.wtsend.backend.dto.response.UserSummaryResponse;
+import com.wtsend.backend.event.OnlineVisibilityChangedEvent;
 import com.wtsend.backend.libs.utils.UserUtils;
 import com.wtsend.backend.model.User;
 import com.wtsend.backend.repository.UserRepository;
@@ -39,7 +40,7 @@ public class UserService implements IUserService {
 
   @Override
   @Transactional(readOnly = true)
-  public UserResponse findById(String id) {
+  public UserResponse findById(UUID id) {
     User user = userRepository.findById(id)
         .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + id));
     return userMapper.toUserResponse(user);
@@ -63,7 +64,7 @@ public class UserService implements IUserService {
         .build();
   }
 
-  public String uploadAvatar(MultipartFile file, String userId) {
+  public String uploadAvatar(MultipartFile file, UUID userId) {
     // Resolve the user first: uploading before this check strands an asset in
     // Cloudinary whenever the id turns out to be bad.
     User user = userRepository.findById(userId)
@@ -119,7 +120,7 @@ public class UserService implements IUserService {
   }
 
   @Override
-  public UserResponse updateUser(UpdateUserRequest request, String userId) {
+  public UserResponse updateUser(UpdateUserRequest request, UUID userId) {
 
     // Keyed on the authenticated subject, never on the request body -- resolving
     // the target from client-supplied fields lets anyone edit anyone.

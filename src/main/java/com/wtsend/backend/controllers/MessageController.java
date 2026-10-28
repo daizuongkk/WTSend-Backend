@@ -1,5 +1,7 @@
 package com.wtsend.backend.controllers;
 
+import java.util.UUID;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -27,37 +29,38 @@ import jakarta.validation.constraints.Min;
 @Validated
 public class MessageController {
 
-	private final IMessageService messageService;
+  private final IMessageService messageService;
 
-	MessageController(IMessageService messageService) {
-		this.messageService = messageService;
-	}
+  MessageController(IMessageService messageService) {
+    this.messageService = messageService;
+  }
 
-	@PostMapping("/direct")
-	/**
-	 * Returns the stored message rather than a string. The client shows a message
-	 * optimistically and needs the real id to reconcile it; the socket echo alone
-	 * meant guessing which echo matched which send.
-	 */
-	public ResponseEntity<MessageResponse> sendDirectMessage(@RequestBody @Valid SendDirectMessageRequest request,
-			@AuthenticationPrincipal Jwt jwt) {
-		return ResponseEntity.ok(messageService.sendDirectMessage(request, jwt.getSubject()));
-	}
+  @PostMapping("/direct")
+  /**
+   * Returns the stored message rather than a string. The client shows a message
+   * optimistically and needs the real id to reconcile it; the socket echo alone
+   * meant guessing which echo matched which send.
+   */
+  public ResponseEntity<MessageResponse> sendDirectMessage(@RequestBody @Valid SendDirectMessageRequest request,
+      @AuthenticationPrincipal Jwt jwt) {
+    return ResponseEntity.ok(messageService.sendDirectMessage(request, UUID.fromString(jwt.getSubject())));
+  }
 
-	@PostMapping("/group")
-	public ResponseEntity<MessageResponse> sendGroupMessage(@RequestBody @Valid SendGroupMessageRequest request,
-			@AuthenticationPrincipal Jwt jwt) {
-		return ResponseEntity.ok(messageService.sendGroupMessage(request, jwt.getSubject()));
-	}
+  @PostMapping("/group")
+  public ResponseEntity<MessageResponse> sendGroupMessage(@RequestBody @Valid SendGroupMessageRequest request,
+      @AuthenticationPrincipal Jwt jwt) {
+    return ResponseEntity.ok(messageService.sendGroupMessage(request, UUID.fromString(jwt.getSubject())));
+  }
 
-	@GetMapping("/{conversationId}")
-	public ResponseEntity<MessagesResponse> getMessages(@PathVariable Long conversationId,
-			@RequestParam(name = "limit", defaultValue = "50") @Min(1) @Max(100) int limit,
-			// Opaque cursor, parsed in the service. Declared as Instant before, which
-			// made the first page fail: required=false skips conversion only when the
-			// parameter is absent, and the client sends an empty cursor=.
-			@RequestParam(name = "cursor", required = false) String cursor,
-			@AuthenticationPrincipal Jwt jwt) {
-		return ResponseEntity.ok(messageService.getMessages(conversationId, jwt.getSubject(), limit, cursor));
-	}
+  @GetMapping("/{conversationId}")
+  public ResponseEntity<MessagesResponse> getMessages(@PathVariable Long conversationId,
+      @RequestParam(name = "limit", defaultValue = "50") @Min(1) @Max(100) int limit,
+      // Opaque cursor, parsed in the service. Declared as Instant before, which
+      // made the first page fail: required=false skips conversion only when the
+      // parameter is absent, and the client sends an empty cursor=.
+      @RequestParam(name = "cursor", required = false) String cursor,
+      @AuthenticationPrincipal Jwt jwt) {
+    return ResponseEntity.ok(messageService.getMessages(conversationId,
+        UUID.fromString(jwt.getSubject()), limit, cursor));
+  }
 }

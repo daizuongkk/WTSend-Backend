@@ -2,6 +2,7 @@ package com.wtsend.backend.repository;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -12,7 +13,7 @@ import com.wtsend.backend.model.Message;
 import com.wtsend.backend.model.Participant;
 
 public interface ParticipantRepository extends JpaRepository<Participant, Long> {
-  Optional<Participant> findByConversationIdAndUserId(Long id, String userId);
+  Optional<Participant> findByConversationIdAndUserId(Long id, UUID userId);
 
   /**
    * COALESCE, not a bare {@code + 1}: the column is nullable and NULL + 1 is
@@ -22,12 +23,12 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query("UPDATE Participant p SET p.unreadCounts = COALESCE(p.unreadCounts, 0) + 1 " +
       "WHERE p.conversation.id = :convId AND p.user.id <> :senderId")
-  void incrementUnreadCountsForOthers(@Param("convId") Long convId, @Param("senderId") String senderId);
+  void incrementUnreadCountsForOthers(@Param("convId") Long convId, @Param("senderId") UUID senderId);
 
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query("UPDATE Participant p SET p.unreadCounts = 0 " +
       "WHERE p.conversation.id = :convId AND p.user.id = :senderId")
-  void resetUnreadCountForSender(@Param("convId") Long convId, @Param("senderId") String senderId);
+  void resetUnreadCountForSender(@Param("convId") Long convId, @Param("senderId") UUID senderId);
 
   /**
    * Marks one participant's view of a conversation as read, in one statement.
@@ -58,6 +59,6 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
            WHERE p.conversation.id = :convId
              AND p.user.id = :userId
       """)
-  int markSeen(@Param("convId") Long convId, @Param("userId") String userId,
+  int markSeen(@Param("convId") Long convId, @Param("userId") UUID userId,
       @Param("lastSeen") Message lastSeen, @Param("readAt") Instant readAt);
 }

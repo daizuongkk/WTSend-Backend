@@ -1,6 +1,7 @@
 package com.wtsend.backend.listener;
 
 import java.util.Collection;
+import java.util.UUID;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -32,31 +33,31 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class PresenceLinkListener {
 
-	private final PresenceAnnouncer announcer;
+  private final PresenceAnnouncer announcer;
 
-	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-	public void onFriendshipCreated(FriendshipCreatedEvent event) {
-		announceQuietly(event.getUserIds());
-	}
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+  public void onFriendshipCreated(FriendshipCreatedEvent event) {
+    announceQuietly(event.getUserIds());
+  }
 
-	/**
-	 * Group members are not necessarily friends with each other -- the creator
-	 * is checked against each of them, not them against one another -- so a new
-	 * conversation can be the thing that makes two people visible to each other.
-	 */
-	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-	public void onConversationCreated(ConversationCreatedEvent event) {
-		announceQuietly(event.getRecipientUserIds());
-	}
+  /**
+   * Group members are not necessarily friends with each other -- the creator
+   * is checked against each of them, not them against one another -- so a new
+   * conversation can be the thing that makes two people visible to each other.
+   */
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+  public void onConversationCreated(ConversationCreatedEvent event) {
+    announceQuietly(event.getRecipientUserIds());
+  }
 
-	private void announceQuietly(Collection<String> userIds) {
-		try {
-			announcer.announceAmong(userIds);
-		} catch (Exception e) {
-			// Already committed, so there is nothing to roll back and Spring would
-			// swallow this silently. Presence being stale is not worth failing the
-			// request that caused it, but it is worth a log line.
-			log.error("Failed to announce presence among {}", userIds, e);
-		}
-	}
+  private void announceQuietly(Collection<UUID> userIds) {
+    try {
+      announcer.announceAmong(userIds);
+    } catch (Exception e) {
+      // Already committed, so there is nothing to roll back and Spring would
+      // swallow this silently. Presence being stale is not worth failing the
+      // request that caused it, but it is worth a log line.
+      log.error("Failed to announce presence among {}", userIds, e);
+    }
+  }
 }

@@ -1,6 +1,7 @@
 package com.wtsend.backend.dto.request;
 
 import java.util.List;
+import java.util.UUID;
 
 import com.wtsend.backend.model.enums.ConversationType;
 
@@ -24,20 +25,20 @@ import lombok.Getter;
 @AllArgsConstructor
 @Builder
 public class CreateConversationRequest {
-	@NotNull(message = "type is required")
-	private ConversationType type;
+  @NotNull(message = "type is required")
+  private ConversationType type;
 
-	/** Bounded by group_info.name, so an over-long one is a 400 and not a 500. */
-	@Size(max = 255, message = "name must be at most 255 characters")
-	private String name;
+  /** Bounded by group_info.name, so an over-long one is a 400 and not a 500. */
+  @Size(max = 255, message = "name must be at most 255 characters")
+  private String name;
 
-	/**
-	 * {@code @NotBlank} on the element, not just {@code @NotEmpty} on the list.
-	 * {@code memberIds: [null]} passed validation and reached
-	 * {@code participantId.equals(...)} as an NPE, and {@code [""]} reached the
-	 * database as a lookup that silently found nobody.
-	 */
-	@NotEmpty(message = "list member can not empty")
-	private List<@NotBlank(message = "member id can not be blank") String> memberIds;
+  /**
+   * {@code @NotBlank} on the element, not just {@code @NotEmpty} on the list.
+   * {@code memberIds: [null]} passed validation and reached
+   * {@code participantId.equals(...)} as an NPE, and {@code [""]} reached the
+   * database as a lookup that silently found nobody.
+   */
+  @NotEmpty(message = "Members is required")
+  private List<@NotBlank(message = "member id can not be blank") UUID> memberIds;
 
 }

@@ -1,5 +1,7 @@
 package com.wtsend.backend.controllers;
 
+import java.util.UUID;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -24,30 +26,30 @@ import jakarta.validation.constraints.NotNull;
 @Validated
 public class ConversationController {
 
-	private final IConversationService conversationService;
+  private final IConversationService conversationService;
 
-	ConversationController(IConversationService conversationService) {
-		this.conversationService = conversationService;
-	}
+  ConversationController(IConversationService conversationService) {
+    this.conversationService = conversationService;
+  }
 
-	@GetMapping("")
-	public ResponseEntity<Object> getConversation(@AuthenticationPrincipal Jwt jwt) {
-		var response = conversationService.getConversations(jwt.getSubject());
-		return ResponseEntity.ok(response);
-	}
+  @GetMapping("")
+  public ResponseEntity<Object> getConversation(@AuthenticationPrincipal Jwt jwt) {
+    var response = conversationService.getConversations(UUID.fromString(jwt.getSubject()));
+    return ResponseEntity.ok(response);
+  }
 
-	@PostMapping()
-	public ResponseEntity<ConversationResponse> createConversation(@RequestBody @Valid CreateConversationRequest request,
-			@AuthenticationPrincipal Jwt jwt) {
-		return ResponseEntity.ok(conversationService.createConversation(request, jwt.getSubject()));
-	}
+  @PostMapping()
+  public ResponseEntity<ConversationResponse> createConversation(@RequestBody @Valid CreateConversationRequest request,
+      @AuthenticationPrincipal Jwt jwt) {
+    return ResponseEntity.ok(conversationService.createConversation(request, UUID.fromString(jwt.getSubject())));
+  }
 
-	@PatchMapping("/{id}")
-	public ResponseEntity<String> markAsSeen(@PathVariable(name = "id") @NotNull Long conversationId,
-			@AuthenticationPrincipal Jwt jwt) {
-		conversationService.markAsSeen(conversationId, jwt.getSubject());
+  @PatchMapping("/{id}")
+  public ResponseEntity<String> markAsSeen(@PathVariable(name = "id") @NotNull Long conversationId,
+      @AuthenticationPrincipal Jwt jwt) {
+    conversationService.markAsSeen(conversationId, UUID.fromString(jwt.getSubject()));
 
-		return ResponseEntity.ok("mark as seen thành công");
-	}
+    return ResponseEntity.ok("mark as seen thành công");
+  }
 
 }

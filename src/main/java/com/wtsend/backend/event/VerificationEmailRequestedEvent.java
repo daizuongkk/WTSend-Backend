@@ -1,5 +1,7 @@
 package com.wtsend.backend.event;
 
+import java.util.UUID;
+
 import lombok.Getter;
 
 /**
@@ -15,9 +17,9 @@ import lombok.Getter;
 @Getter
 public class VerificationEmailRequestedEvent {
 
-	private final String userId;
+  private final UUID userId;
 
-	public VerificationEmailRequestedEvent(String userId) {
-		this.userId = userId;
-	}
+  public VerificationEmailRequestedEvent(UUID userId) {
+    this.userId = userId;
+  }
 }

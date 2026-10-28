@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -40,51 +41,51 @@ import lombok.Setter;
 @EntityListeners(AuditingEntityListener.class)
 public class Conversation implements Serializable {
 
-	@OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL)
-	@Builder.Default
-	List<Participant> participants = new ArrayList<>();
+  @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL)
+  @Builder.Default
+  List<Participant> participants = new ArrayList<>();
 
-	@OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL)
-	@Builder.Default
-	List<Message> messages = new ArrayList<>();
+  @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL)
+  @Builder.Default
+  List<Message> messages = new ArrayList<>();
 
-	@OneToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "lastMessageId")
-	Message lastMessage;
+  @OneToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "lastMessageId")
+  Message lastMessage;
 
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	Long id;
-	@Enumerated
-	ConversationType type;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  Long id;
+  @Enumerated
+  ConversationType type;
 
-	/**
-	 * For DIRECT conversations: the two participant ids ordered
-	 * lexicographically and joined, so (A,B) and (B,A) produce the same value.
-	 * NULL for GROUP. A unique index on this column is what actually prevents a
-	 * pair ending up with two threads -- the application check alone loses the
-	 * race between two concurrent first messages.
-	 */
-	String directKey;
+  /**
+   * For DIRECT conversations: the two participant ids ordered
+   * lexicographically and joined, so (A,B) and (B,A) produce the same value.
+   * NULL for GROUP. A unique index on this column is what actually prevents a
+   * pair ending up with two threads -- the application check alone loses the
+   * race between two concurrent first messages.
+   */
+  String directKey;
 
-	@OneToOne(mappedBy = "conversation", cascade = CascadeType.ALL)
-	GroupInfo group;
+  @OneToOne(mappedBy = "conversation", cascade = CascadeType.ALL)
+  GroupInfo group;
 
-	Instant lastMessageAt;
+  Instant lastMessageAt;
 
-	@Column(name = "createdAt")
-	@CreatedDate
-	Instant createdAt;
+  @Column(name = "createdAt")
+  @CreatedDate
+  Instant createdAt;
 
-	@Column(name = "updatedAt")
-	@LastModifiedDate
-	Instant updatedAt;
+  @Column(name = "updatedAt")
+  @LastModifiedDate
+  Instant updatedAt;
 
-	/** Must agree with the SQL backfill in V2: ids are lowercase UUIDs. */
-	public static String directKeyOf(String userId, String otherUserId) {
-		return userId.compareTo(otherUserId) <= 0
-				? userId + ":" + otherUserId
-				: otherUserId + ":" + userId;
-	}
+  /** Must agree with the SQL backfill in V2: ids are lowercase UUIDs. */
+  public static String directKeyOf(UUID userId, UUID otherUserId) {
+    return userId.compareTo(otherUserId) <= 0
+        ? userId + ":" + otherUserId
+        : otherUserId + ":" + userId;
+  }
 
 }

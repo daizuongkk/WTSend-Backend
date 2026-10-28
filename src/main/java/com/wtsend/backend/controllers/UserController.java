@@ -1,6 +1,7 @@
 package com.wtsend.backend.controllers;
 
 import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -40,7 +41,7 @@ public class UserController {
 
   @GetMapping("/me")
   public ResponseEntity<UserResponse> me(@AuthenticationPrincipal Jwt jwt) {
-    return ResponseEntity.ok(userService.findById(jwt.getSubject()));
+    return ResponseEntity.ok(userService.findById(UUID.fromString(jwt.getSubject())));
   }
 
   @GetMapping("/search")
@@ -57,7 +58,7 @@ public class UserController {
   @PostMapping("/upload")
   public ResponseEntity<Map<String, String>> uploadAvatar(@RequestParam(name = "img") MultipartFile file,
       @AuthenticationPrincipal Jwt jwt) {
-    String imgUrl = userService.uploadAvatar(file, jwt.getSubject());
+    String imgUrl = userService.uploadAvatar(file, UUID.fromString(jwt.getSubject()));
 
     return ResponseEntity.ok(Map.of("avatarUrl", imgUrl));
   }
@@ -72,7 +73,7 @@ public class UserController {
   public ResponseEntity<AuthResponse> changePassword(@RequestBody @Valid ChangePasswordRequest request,
       @AuthenticationPrincipal Jwt jwt) {
 
-    AuthResponse res = authService.changePassword(request, jwt.getSubject());
+    AuthResponse res = authService.changePassword(request, UUID.fromString(jwt.getSubject()));
     return ResponseEntity.ok()
         .header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
         .body(res);
@@ -82,7 +83,7 @@ public class UserController {
   public ResponseEntity<UserResponse> updateUser(@ModelAttribute @Valid UpdateUserRequest request,
       @AuthenticationPrincipal Jwt jwt) {
 
-    return ResponseEntity.ok(userService.updateUser(request, jwt.getSubject()));
+    return ResponseEntity.ok(userService.updateUser(request, UUID.fromString(jwt.getSubject())));
   }
 
 }

@@ -1,5 +1,8 @@
 package com.wtsend.backend.event;
 
+import java.util.UUID;
+
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
@@ -11,11 +14,9 @@ import lombok.Getter;
  * carry the token itself.
  */
 @Getter
+@AllArgsConstructor
 public class PasswordResetRequestedEvent {
 
-	private final String userId;
+  private final UUID userId;
 
-	public PasswordResetRequestedEvent(String userId) {
-		this.userId = userId;
-	}
 }

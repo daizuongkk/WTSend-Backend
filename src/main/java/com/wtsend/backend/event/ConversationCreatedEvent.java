@@ -1,6 +1,7 @@
 package com.wtsend.backend.event;
 
 import java.util.List;
+import java.util.UUID;
 
 import com.wtsend.backend.dto.response.ConversationResponse;
 
@@ -15,17 +16,17 @@ import lombok.Getter;
 @Getter
 public class ConversationCreatedEvent {
 
-	private final ConversationResponse conversation;
+  private final ConversationResponse conversation;
 
-	/**
-	 * Every participant, the creator included. Their other tabs and devices have
-	 * no other way to learn the conversation exists; only the tab that issued
-	 * the request knows, because it adds it locally.
-	 */
-	private final List<String> recipientUserIds;
+  /**
+   * Every participant, the creator included. Their other tabs and devices have
+   * no other way to learn the conversation exists; only the tab that issued
+   * the request knows, because it adds it locally.
+   */
+  private final List<UUID> recipientUserIds;
 
-	public ConversationCreatedEvent(ConversationResponse conversation, List<String> recipientUserIds) {
-		this.conversation = conversation;
-		this.recipientUserIds = List.copyOf(recipientUserIds);
-	}
+  public ConversationCreatedEvent(ConversationResponse conversation, List<UUID> recipientUserIds) {
+    this.conversation = conversation;
+    this.recipientUserIds = List.copyOf(recipientUserIds);
+  }
 }

@@ -17,29 +17,29 @@ import com.wtsend.backend.model.User;
 @Service
 public class JwtService {
 
-	@Value("${jwt.access-token.ttl}")
-	private Long accessTokenTTL;
+  @Value("${jwt.access-token.ttl}")
+  private Long accessTokenTTL;
 
-	private final JwtEncoder jwtEncoder;
+  private final JwtEncoder jwtEncoder;
 
-	JwtService(JwtEncoder jwtEncoder) {
-		this.jwtEncoder = jwtEncoder;
-	}
+  JwtService(JwtEncoder jwtEncoder) {
+    this.jwtEncoder = jwtEncoder;
+  }
 
-	public String generateToken(User user) {
+  public String generateToken(User user) {
 
-		JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).type("JWT").build();
+    JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).type("JWT").build();
 
-		Instant now = Instant.now();
+    Instant now = Instant.now();
 
-		JwtClaimsSet claimsSet = JwtClaimsSet.builder().issuer(user.getEmail()).subject(user.getId())
-				.claim("email", user.getEmail())
-				.claim("avt", user.getAvatarUrl() == null ? "" : user.getAvatarUrl())
-				.claim("emv", user.isEmailVerified())
-				.id(UUID.randomUUID().toString())
-				.issuedAt(now)
-				.expiresAt(now.plus(Duration.ofMinutes(accessTokenTTL))).build();
-		return jwtEncoder.encode(JwtEncoderParameters.from(header, claimsSet)).getTokenValue();
-	}
+    JwtClaimsSet claimsSet = JwtClaimsSet.builder().issuer(user.getEmail()).subject(user.getId().toString())
+        .claim("email", user.getEmail())
+        .claim("avt", user.getAvatarUrl() == null ? "" : user.getAvatarUrl())
+        .claim("emv", user.isEmailVerified())
+        .id(UUID.randomUUID().toString())
+        .issuedAt(now)
+        .expiresAt(now.plus(Duration.ofMinutes(accessTokenTTL))).build();
+    return jwtEncoder.encode(JwtEncoderParameters.from(header, claimsSet)).getTokenValue();
+  }
 
 }

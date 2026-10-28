@@ -76,222 +76,222 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class RefreshTokenService {
 
-	private static final String TOKEN_KEY = "rt:";
-	private static final String USED_KEY = "rtused:";
-	private static final String FAMILY_KEY = "rtfam:";
+  private static final String TOKEN_KEY = "rt:";
+  private static final String USED_KEY = "rtused:";
+  private static final String FAMILY_KEY = "rtfam:";
 
-	/** What one rotation attempt turned out to be. */
-	public enum Outcome {
-		OK, INVALID, REUSED
-	}
+  /** What one rotation attempt turned out to be. */
+  public enum Outcome {
+    OK, INVALID, REUSED
+  }
 
-	/** The result of a rotation: on OK, who it belongs to and the successor. */
-	public record Rotation(Outcome outcome, String userId, String token, String familyId) {
-	}
+  /** The result of a rotation: on OK, who it belongs to and the successor. */
+  public record Rotation(Outcome outcome, String userId, String token, String familyId) {
+  }
 
-	/** A freshly issued token and the chain it belongs to. */
-	public record IssuedRefreshToken(String token, String familyId) {
-	}
+  /** A freshly issued token and the chain it belongs to. */
+  public record IssuedRefreshToken(String token, UUID familyId) {
+  }
 
-	/**
-	 * Consumes one token and issues its successor in the same family, as a single
-	 * operation -- or, for a token spent moments ago, issues a second successor
-	 * rather than treating the duplicate as theft.
-	 *
-	 * <p>
-	 * KEYS: rt:{token}, rtused:{token}. ARGV: token, newToken, ttlSeconds, now,
-	 * graceSeconds.
-	 */
-	private static final RedisScript<List> ROTATE = new DefaultRedisScript<>("""
-			local token, successor = ARGV[1], ARGV[2]
-			local ttl, now, grace = tonumber(ARGV[3]), tonumber(ARGV[4]), tonumber(ARGV[5])
+  /**
+   * Consumes one token and issues its successor in the same family, as a single
+   * operation -- or, for a token spent moments ago, issues a second successor
+   * rather than treating the duplicate as theft.
+   *
+   * <p>
+   * KEYS: rt:{token}, rtused:{token}. ARGV: token, newToken, ttlSeconds, now,
+   * graceSeconds.
+   */
+  private static final RedisScript<List> ROTATE = new DefaultRedisScript<>("""
+      local token, successor = ARGV[1], ARGV[2]
+      local ttl, now, grace = tonumber(ARGV[3]), tonumber(ARGV[4]), tonumber(ARGV[5])
 
-			-- "{userId}|{familyId}|{epochSeconds}", the shape of both rt: and rtused:
-			local function parts(value)
-			  local first = string.find(value, '|', 1, true)
-			  local second = string.find(value, '|', first + 1, true)
-			  return string.sub(value, 1, first - 1),
-			         string.sub(value, first + 1, second - 1),
-			         tonumber(string.sub(value, second + 1))
-			end
+      -- "{userId}|{familyId}|{epochSeconds}", the shape of both rt: and rtused:
+      local function parts(value)
+        local first = string.find(value, '|', 1, true)
+        local second = string.find(value, '|', first + 1, true)
+        return string.sub(value, 1, first - 1),
+               string.sub(value, first + 1, second - 1),
+               tonumber(string.sub(value, second + 1))
+      end
 
-			-- A password change invalidates everything issued before it, wherever it
-			-- lives, without this process having to enumerate the user's tokens.
-			local function supersededByPasswordChange(userId, stamp)
-			  return stamp < tonumber(redis.call('GET', 'pwdchg:' .. userId) or '0')
-			end
+      -- A password change invalidates everything issued before it, wherever it
+      -- lives, without this process having to enumerate the user's tokens.
+      local function supersededByPasswordChange(userId, stamp)
+        return stamp < tonumber(redis.call('GET', 'pwdchg:' .. userId) or '0')
+      end
 
-			local function issue(userId, family)
-			  redis.call('SET', 'rt:' .. successor, userId .. '|' .. family .. '|' .. now, 'EX', ttl)
-			  redis.call('SADD', 'rtfam:' .. family, successor)
-			  redis.call('EXPIRE', 'rtfam:' .. family, ttl)
-			  return {'OK', userId, family}
-			end
+      local function issue(userId, family)
+        redis.call('SET', 'rt:' .. successor, userId .. '|' .. family .. '|' .. now, 'EX', ttl)
+        redis.call('SADD', 'rtfam:' .. family, successor)
+        redis.call('EXPIRE', 'rtfam:' .. family, ttl)
+        return {'OK', userId, family}
+      end
 
-			local stored = redis.call('GET', KEYS[1])
+      local stored = redis.call('GET', KEYS[1])
 
-			if not stored then
-			  local spent = redis.call('GET', KEYS[2])
-			  if not spent then
-			    return {'INVALID', '', ''}
-			  end
+      if not stored then
+        local spent = redis.call('GET', KEYS[2])
+        if not spent then
+          return {'INVALID', '', ''}
+        end
 
-			  local userId, family, consumedAt = parts(spent)
+        local userId, family, consumedAt = parts(spent)
 
-			  -- Inside the window this is two tabs, not a thief. Strictly inside:
-			  -- these stamps are whole seconds, so `>` would make a grace of 0 still
-			  -- forgive anything landing in the same second, and 0 has to mean none.
-			  --
-			  -- The password check uses consumedAt rather than the original issuedAt,
-			  -- which the tombstone does not carry: at most the grace window of
-			  -- slack, and the successor issued below carries `now`, so the next
-			  -- rotation is exact.
-			  if now - consumedAt >= grace or supersededByPasswordChange(userId, consumedAt) then
-			    return {'REUSED', '', family}
-			  end
+        -- Inside the window this is two tabs, not a thief. Strictly inside:
+        -- these stamps are whole seconds, so `>` would make a grace of 0 still
+        -- forgive anything landing in the same second, and 0 has to mean none.
+        --
+        -- The password check uses consumedAt rather than the original issuedAt,
+        -- which the tombstone does not carry: at most the grace window of
+        -- slack, and the successor issued below carries `now`, so the next
+        -- rotation is exact.
+        if now - consumedAt >= grace or supersededByPasswordChange(userId, consumedAt) then
+          return {'REUSED', '', family}
+        end
 
-			  return issue(userId, family)
-			end
+        return issue(userId, family)
+      end
 
-			local userId, family, issuedAt = parts(stored)
-			if supersededByPasswordChange(userId, issuedAt) then
-			  redis.call('DEL', KEYS[1])
-			  return {'INVALID', '', ''}
-			end
+      local userId, family, issuedAt = parts(stored)
+      if supersededByPasswordChange(userId, issuedAt) then
+        redis.call('DEL', KEYS[1])
+        return {'INVALID', '', ''}
+      end
 
-			redis.call('DEL', KEYS[1])
-			redis.call('SET', KEYS[2], userId .. '|' .. family .. '|' .. now, 'EX', ttl)
-			redis.call('SREM', 'rtfam:' .. family, token)
-			return issue(userId, family)
-			""", List.class);
+      redis.call('DEL', KEYS[1])
+      redis.call('SET', KEYS[2], userId .. '|' .. family .. '|' .. now, 'EX', ttl)
+      redis.call('SREM', 'rtfam:' .. family, token)
+      return issue(userId, family)
+      """, List.class);
 
-	/** KEYS: rtfam:{family}. Returns how many tokens it removed. */
-	private static final RedisScript<Long> REVOKE_FAMILY = new DefaultRedisScript<>("""
-			local members = redis.call('SMEMBERS', KEYS[1])
-			for i = 1, #members do
-			  redis.call('DEL', 'rt:' .. members[i])
-			  redis.call('DEL', 'rtused:' .. members[i])
-			end
-			redis.call('DEL', KEYS[1])
-			return #members
-			""", Long.class);
+  /** KEYS: rtfam:{family}. Returns how many tokens it removed. */
+  private static final RedisScript<Long> REVOKE_FAMILY = new DefaultRedisScript<>("""
+      local members = redis.call('SMEMBERS', KEYS[1])
+      for i = 1, #members do
+        redis.call('DEL', 'rt:' .. members[i])
+        redis.call('DEL', 'rtused:' .. members[i])
+      end
+      redis.call('DEL', KEYS[1])
+      return #members
+      """, Long.class);
 
-	@Value("${jwt.refresh-token.ttl}")
-	private Long refreshTokenTtlDays;
+  @Value("${jwt.refresh-token.ttl}")
+  private Long refreshTokenTtlDays;
 
-	/**
-	 * How long after a token is spent a second presentation of it still counts as
-	 * a duplicate rather than a replay. Seconds, and deliberately short: it has
-	 * to cover two tabs loading together, not a stolen cookie.
-	 */
-	@Value("${jwt.refresh-token.replay-grace-seconds:10}")
-	private long replayGraceSeconds;
+  /**
+   * How long after a token is spent a second presentation of it still counts as
+   * a duplicate rather than a replay. Seconds, and deliberately short: it has
+   * to cover two tabs loading together, not a stolen cookie.
+   */
+  @Value("${jwt.refresh-token.replay-grace-seconds:10}")
+  private long replayGraceSeconds;
 
-	private final StringRedisTemplate redis;
-	private final UserRepository userRepo;
-	private final PasswordChangeCutoff passwordChangeCutoff;
+  private final StringRedisTemplate redis;
+  private final UserRepository userRepo;
+  private final PasswordChangeCutoff passwordChangeCutoff;
 
-	public RefreshTokenService(StringRedisTemplate redis, UserRepository userRepo,
-			PasswordChangeCutoff passwordChangeCutoff) {
-		this.redis = redis;
-		this.userRepo = userRepo;
-		this.passwordChangeCutoff = passwordChangeCutoff;
-	}
+  public RefreshTokenService(StringRedisTemplate redis, UserRepository userRepo,
+      PasswordChangeCutoff passwordChangeCutoff) {
+    this.redis = redis;
+    this.userRepo = userRepo;
+    this.passwordChangeCutoff = passwordChangeCutoff;
+  }
 
-	private long ttlSeconds() {
-		return Duration.ofDays(refreshTokenTtlDays).toSeconds();
-	}
+  private long ttlSeconds() {
+    return Duration.ofDays(refreshTokenTtlDays).toSeconds();
+  }
 
-	/** Starts a new chain for this user. */
-	public IssuedRefreshToken create(User user) {
-		return issue(user.getId(), UUID.randomUUID().toString());
-	}
+  /** Starts a new chain for this user. */
+  public IssuedRefreshToken create(User user) {
+    return issue(user.getId(), UUID.randomUUID());
+  }
 
-	private IssuedRefreshToken issue(String userId, String familyId) {
-		String token = UUID.randomUUID().toString();
-		long ttl = ttlSeconds();
+  private IssuedRefreshToken issue(UUID userId, UUID familyId) {
+    String token = UUID.randomUUID().toString();
+    long ttl = ttlSeconds();
 
-		redis.opsForValue().set(TOKEN_KEY + token,
-				"%s|%s|%d".formatted(userId, familyId, Instant.now().getEpochSecond()),
-				Duration.ofSeconds(ttl));
-		redis.opsForSet().add(FAMILY_KEY + familyId, token);
-		redis.expire(FAMILY_KEY + familyId, Duration.ofSeconds(ttl));
+    redis.opsForValue().set(TOKEN_KEY + token,
+        "%s|%s|%d".formatted(userId, familyId, Instant.now().getEpochSecond()),
+        Duration.ofSeconds(ttl));
+    redis.opsForSet().add(FAMILY_KEY + familyId, token);
+    redis.expire(FAMILY_KEY + familyId, Duration.ofSeconds(ttl));
 
-		return new IssuedRefreshToken(token, familyId);
-	}
+    return new IssuedRefreshToken(token, familyId);
+  }
 
-	/**
-	 * Rotates a token and returns the user it belonged to plus the successor.
-	 *
-	 * <p>
-	 * A token presented again within the grace window gets its own successor, so
-	 * two tabs restoring the same session do not fight. Later than that it is a
-	 * replay: the whole family is revoked and the call then fails like any
-	 * invalid one, so the caller learns nothing about having tripped the
-	 * detection -- the only one who should be able to tell is whoever reads the
-	 * log.
-	 */
-	public RotatedSession rotate(String token) {
-		if (token == null || token.isBlank())
-			throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
+  /**
+   * Rotates a token and returns the user it belonged to plus the successor.
+   *
+   * <p>
+   * A token presented again within the grace window gets its own successor, so
+   * two tabs restoring the same session do not fight. Later than that it is a
+   * replay: the whole family is revoked and the call then fails like any
+   * invalid one, so the caller learns nothing about having tripped the
+   * detection -- the only one who should be able to tell is whoever reads the
+   * log.
+   */
+  public RotatedSession rotate(String token) {
+    if (token == null || token.isBlank())
+      throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
 
-		String successor = UUID.randomUUID().toString();
-		@SuppressWarnings("unchecked")
-		List<String> result = redis.execute(ROTATE,
-				List.of(TOKEN_KEY + token, USED_KEY + token),
-				token, successor, String.valueOf(ttlSeconds()),
-				String.valueOf(Instant.now().getEpochSecond()),
-				String.valueOf(replayGraceSeconds));
+    String successor = UUID.randomUUID().toString();
+    @SuppressWarnings("unchecked")
+    List<UUID> result = redis.execute(ROTATE,
+        List.of(TOKEN_KEY + token, USED_KEY + token),
+        token, successor, String.valueOf(ttlSeconds()),
+        String.valueOf(Instant.now().getEpochSecond()),
+        String.valueOf(replayGraceSeconds));
 
-		Outcome outcome = result == null || result.isEmpty()
-				? Outcome.INVALID
-				: Outcome.valueOf(result.get(0));
+    Outcome outcome = result == null || result.isEmpty()
+        ? Outcome.INVALID
+        : Outcome.valueOf(result.get(0).toString());
 
-		if (outcome == Outcome.REUSED) {
-			String family = result.get(2);
-			Long revoked = redis.execute(REVOKE_FAMILY, List.of(FAMILY_KEY + family));
-			log.warn("Refresh token replayed; revoked {} token(s) in family {}", revoked, family);
-			throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID).withDetail("replayed family=" + family);
-		}
+    if (outcome == Outcome.REUSED) {
+      UUID family = result.get(2);
+      Long revoked = redis.execute(REVOKE_FAMILY, List.of(FAMILY_KEY + family));
+      log.warn("Refresh token replayed; revoked {} token(s) in family {}", revoked, family);
+      throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID).withDetail("replayed family=" + family);
+    }
 
-		if (outcome == Outcome.INVALID)
-			throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
+    if (outcome == Outcome.INVALID)
+      throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
 
-		String userId = result.get(1);
-		User user = userRepo.findById(userId)
-				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND)
-						.withDetail("id=" + userId + " (referenced by a live refresh token)"));
+    UUID userId = result.get(1);
+    User user = userRepo.findById(userId)
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND)
+            .withDetail("id=" + userId + " (referenced by a live refresh token)"));
 
-		return new RotatedSession(user, new IssuedRefreshToken(successor, result.get(2)));
-	}
+    return new RotatedSession(user, new IssuedRefreshToken(successor, result.get(2)));
+  }
 
-	/** The user a rotation belonged to, and the token that replaces the old one. */
-	public record RotatedSession(User user, IssuedRefreshToken refreshToken) {
-	}
+  /** The user a rotation belonged to, and the token that replaces the old one. */
+  public record RotatedSession(User user, IssuedRefreshToken refreshToken) {
+  }
 
-	/**
-	 * Deletes the presented token only, leaving the user's other sessions alone.
-	 * Idempotent: revoking an already-gone token is not an error.
-	 */
-	public void revoke(String token) {
-		if (token == null || token.isBlank())
-			return;
+  /**
+   * Deletes the presented token only, leaving the user's other sessions alone.
+   * Idempotent: revoking an already-gone token is not an error.
+   */
+  public void revoke(String token) {
+    if (token == null || token.isBlank())
+      return;
 
-		redis.delete(TOKEN_KEY + token);
-	}
+    redis.delete(TOKEN_KEY + token);
+  }
 
-	/**
-	 * Marks every credential issued before now as dead for this user, refresh
-	 * and access alike.
-	 *
-	 * <p>
-	 * Replaces enumerating and deleting the user's refresh tokens, and reaches
-	 * further than that ever could: access tokens are stateless, so
-	 * {@link PasswordChangeCutoff} is what {@code JwtConfig} consults to reject
-	 * ones minted before the change. The refresh tokens issued earlier are left
-	 * to age out -- the rotation script refuses them, so they are inert.
-	 */
-	public void revokeEverythingIssuedBefore(String userId) {
-		passwordChangeCutoff.markNow(userId);
-	}
+  /**
+   * Marks every credential issued before now as dead for this user, refresh
+   * and access alike.
+   *
+   * <p>
+   * Replaces enumerating and deleting the user's refresh tokens, and reaches
+   * further than that ever could: access tokens are stateless, so
+   * {@link PasswordChangeCutoff} is what {@code JwtConfig} consults to reject
+   * ones minted before the change. The refresh tokens issued earlier are left
+   * to age out -- the rotation script refuses them, so they are inert.
+   */
+  public void revokeEverythingIssuedBefore(UUID userId) {
+    passwordChangeCutoff.markNow(userId);
+  }
 }

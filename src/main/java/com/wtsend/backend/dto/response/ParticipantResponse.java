@@ -1,6 +1,7 @@
 package com.wtsend.backend.dto.response;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,12 +15,12 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ParticipantResponse {
-	private Long id;
-	private String userId;
-	private String displayName;
-	private String avatarUrl;
-	private Instant lastReadAt;
-	private Long unreadCounts;
-	private Long lastSeenMessageId;
-	private Instant joinedAt;
+  private Long id;
+  private UUID userId;
+  private String displayName;
+  private String avatarUrl;
+  private Instant lastReadAt;
+  private Long unreadCounts;
+  private Long lastSeenMessageId;
+  private Instant joinedAt;
 }

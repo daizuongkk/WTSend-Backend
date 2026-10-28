@@ -1,6 +1,7 @@
 package com.wtsend.backend.event;
 
 import java.util.List;
+import java.util.UUID;
 
 import lombok.Getter;
 
@@ -16,9 +17,9 @@ import lombok.Getter;
 @Getter
 public class FriendshipCreatedEvent {
 
-	private final List<String> userIds;
+  private final List<UUID> userIds;
 
-	public FriendshipCreatedEvent(String oneUserId, String otherUserId) {
-		this.userIds = List.of(oneUserId, otherUserId);
-	}
+  public FriendshipCreatedEvent(UUID oneUserId, UUID otherUserId) {
+    this.userIds = List.of(oneUserId, otherUserId);
+  }
 }

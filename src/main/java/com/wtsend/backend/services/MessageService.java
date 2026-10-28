@@ -3,6 +3,7 @@ package com.wtsend.backend.services;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.CannotAcquireLockException;
@@ -15,6 +16,8 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.wtsend.backend.common.exception.AppException;
+import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.dto.request.SendDirectMessageRequest;
 import com.wtsend.backend.dto.request.SendGroupMessageRequest;
 import com.wtsend.backend.dto.response.ConversationResponse;
@@ -22,8 +25,6 @@ import com.wtsend.backend.dto.response.LastMessage;
 import com.wtsend.backend.dto.response.MessageResponse;
 import com.wtsend.backend.dto.response.MessagesResponse;
 import com.wtsend.backend.event.NewMessageEvent;
-import com.wtsend.backend.common.exception.AppException;
-import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.ConversationMapper;
 import com.wtsend.backend.libs.MessageCursor;
 import com.wtsend.backend.libs.MessageMapper;
@@ -66,9 +67,9 @@ public class MessageService implements IMessageService {
       // Retry advice sits outside the transaction advice, so each attempt
       // gets a fresh transaction rather than reusing a rollback-only one.
       DataIntegrityViolationException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
-  public MessageResponse sendDirectMessage(SendDirectMessageRequest request, String senderId) {
+  public MessageResponse sendDirectMessage(SendDirectMessageRequest request, UUID senderId) {
 
-    String recipientId = request.getRecipientId();
+    UUID recipientId = request.getRecipientId();
 
     if (!friendRepo.existsFriendship(senderId, recipientId))
       throw new AppException(ErrorCode.NOT_FRIENDS).withDetail("recipientId=" + recipientId);
@@ -130,7 +131,7 @@ public class MessageService implements IMessageService {
   @Override
   @Retryable(retryFor = { CannotAcquireLockException.class,
       PessimisticLockingFailureException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
-  public MessageResponse sendGroupMessage(SendGroupMessageRequest request, String senderId) {
+  public MessageResponse sendGroupMessage(SendGroupMessageRequest request, UUID senderId) {
     Long conversationId = request.getConversationId();
 
     // WithGraph because checkMembership walks the participants and their users,
@@ -169,7 +170,7 @@ public class MessageService implements IMessageService {
    * clear the persistence context and {@code message} would be detached with
    * lazy associations after them.
    */
-  private MessageResponse publishNewMessage(Conversation conversation, Message message, String senderId) {
+  private MessageResponse publishNewMessage(Conversation conversation, Message message, UUID senderId) {
     MessageResponse messageDto = messageMapper.toResponse(message);
     LastMessage lastMessageDto = messageMapper.toLastMessage(message);
     Instant sentAt = message.getCreatedAt();
@@ -196,7 +197,7 @@ public class MessageService implements IMessageService {
 
   @Override
   @Transactional(readOnly = true)
-  public MessagesResponse getMessages(Long conversationId, String userId, int limit, String cursor) {
+  public MessagesResponse getMessages(Long conversationId, UUID userId, int limit, String cursor) {
 
     if (participantRepo.findByConversationIdAndUserId(conversationId, userId).isEmpty())
       throw new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED)

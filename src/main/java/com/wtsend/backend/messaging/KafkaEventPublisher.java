@@ -1,5 +1,7 @@
 package com.wtsend.backend.messaging;
 
+import java.util.UUID;
+
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
@@ -44,54 +46,54 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class KafkaEventPublisher {
 
-	static final String FAILURE_COUNTER = "wtsend.kafka.send.failures";
+  static final String FAILURE_COUNTER = "wtsend.kafka.send.failures";
 
-	private final KafkaTemplate<Object, Object> kafka;
-	private final MessagingProperties topics;
-	private final MeterRegistry meters;
+  private final KafkaTemplate<Object, Object> kafka;
+  private final MessagingProperties topics;
+  private final MeterRegistry meters;
 
-	public KafkaEventPublisher(KafkaTemplate<Object, Object> kafka, MessagingProperties topics,
-			MeterRegistry meters) {
-		this.kafka = kafka;
-		this.topics = topics;
-		this.meters = meters;
-	}
+  public KafkaEventPublisher(KafkaTemplate<Object, Object> kafka, MessagingProperties topics,
+      MeterRegistry meters) {
+    this.kafka = kafka;
+    this.topics = topics;
+    this.meters = meters;
+  }
 
-	/**
-	 * Asks for one of our emails to be sent, out of band.
-	 *
-	 * <p>
-	 * Keyed by user id, so everything addressed to one person stays in one
-	 * partition and therefore in order -- two verification requests cannot
-	 * overtake each other.
-	 */
-	public void publishEmail(EmailKind kind, String userId, String traceId) {
-		EmailRequestedEvent event = EmailRequestedEvent.of(kind, userId, traceId);
-		String topic = topics.getEmailNotifications().getName();
+  /**
+   * Asks for one of our emails to be sent, out of band.
+   *
+   * <p>
+   * Keyed by user id, so everything addressed to one person stays in one
+   * partition and therefore in order -- two verification requests cannot
+   * overtake each other.
+   */
+  public void publishEmail(EmailKind kind, UUID userId, String traceId) {
+    EmailRequestedEvent event = EmailRequestedEvent.of(kind, userId, traceId);
+    String topic = topics.getEmailNotifications().getName();
 
-		try {
-			kafka.send(topic, userId, event)
-					.whenComplete((result, failure) -> {
-						if (failure != null)
-							recordFailure(topic, event, failure);
-					});
-		} catch (Exception e) {
-			// send itself throws when it cannot even buffer -- most often
-			// max.block.ms expiring because the broker is unreachable and no
-			// metadata is available.
-			recordFailure(topic, event, e);
-		}
-	}
+    try {
+      kafka.send(topic, userId, event)
+          .whenComplete((result, failure) -> {
+            if (failure != null)
+              recordFailure(topic, event, failure);
+          });
+    } catch (Exception e) {
+      // send itself throws when it cannot even buffer -- most often
+      // max.block.ms expiring because the broker is unreachable and no
+      // metadata is available.
+      recordFailure(topic, event, e);
+    }
+  }
 
-	private void recordFailure(String topic, EmailRequestedEvent event, Throwable failure) {
-		Counter.builder(FAILURE_COUNTER)
-				.description("Events that could not be written to Kafka at all")
-				.tag("topic", topic)
-				.register(meters)
-				.increment();
-		// ERROR, with the ids needed to work out which user never got their
-		// email. Nothing retries this: the event is gone.
-		log.error("Failed to publish {} eventId={} userId={} to {}",
-				event.kind(), event.eventId(), event.userId(), topic, failure);
-	}
+  private void recordFailure(String topic, EmailRequestedEvent event, Throwable failure) {
+    Counter.builder(FAILURE_COUNTER)
+        .description("Events that could not be written to Kafka at all")
+        .tag("topic", topic)
+        .register(meters)
+        .increment();
+    // ERROR, with the ids needed to work out which user never got their
+    // email. Nothing retries this: the event is gone.
+    log.error("Failed to publish {} eventId={} userId={} to {}",
+        event.kind(), event.eventId(), event.userId(), topic, failure);
+  }
 }
