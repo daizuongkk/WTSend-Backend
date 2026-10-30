@@ -7,8 +7,8 @@ import com.wtsend.backend.dto.response.InitUploadResponse;
 import com.wtsend.backend.dto.response.MediaResponse;
 
 public interface IMediaService {
-  public InitUploadResponse initUpload(UUID userId, InitUploadRequest request);
+  public InitUploadResponse initUpload(String userId, InitUploadRequest request);
 
-  MediaResponse completeUpload(UUID userId, UUID id);
+  MediaResponse completeUpload(String userId, UUID id);
 
 }

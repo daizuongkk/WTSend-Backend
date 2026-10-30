@@ -29,7 +29,7 @@ import lombok.Setter;
 public class Media {
   @Id
   private UUID id;
-  private UUID ownerId;
+  private String ownerId;
   private String originalName;
   private String contentType;
   private Long sizeBytes;
@@ -44,7 +44,7 @@ public class Media {
   private Instant createdAt;
   private Instant updatedAt;
 
-  public static Media pending(UUID id, UUID ownerId, InitUploadRequest req, String key) {
+  public static Media pending(UUID id, String ownerId, InitUploadRequest req, String key) {
     Media m = new Media();
     m.id = id;
     m.ownerId = ownerId;

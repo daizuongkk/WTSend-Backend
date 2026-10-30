@@ -9,6 +9,6 @@ import com.wtsend.backend.model.Media;
 
 public interface MediaRepository extends JpaRepository<Media, UUID> {
 
-  Optional<Media> findByIdAndOwnerId(UUID id, UUID userId);
+  Optional<Media> findByIdAndOwnerId(UUID id, String userId);
 
 }

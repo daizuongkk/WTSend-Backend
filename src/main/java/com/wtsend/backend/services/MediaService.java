@@ -58,7 +58,7 @@ public class MediaService implements IMediaService {
     return 20L * 1024 * 1024;
   }
 
-  public InitUploadResponse initUpload(UUID userId, InitUploadRequest req) {
+  public InitUploadResponse initUpload(String userId, InitUploadRequest req) {
     if (!EXT.containsKey(req.contentType()) || req.size() > maxSizeFor(req.contentType()))
       throw new AppException(ErrorCode.INVALID_REQUEST);
 
@@ -82,7 +82,7 @@ public class MediaService implements IMediaService {
 
   @Override
   @Transactional
-  public MediaResponse completeUpload(UUID userId, UUID id) {
+  public MediaResponse completeUpload(String userId, UUID id) {
     Media m = repo.findByIdAndOwnerId(id, userId).orElseThrow(() -> new AppException(ErrorCode.MEDIA_NOT_FOUND));
     if (m.getStatus() != MediaStatus.PENDING)
       return toResponse(m); // idempotent
