@@ -40,88 +40,88 @@ import lombok.experimental.FieldDefaults;
 @Table(name = "users")
 public class User implements UserDetails {
 
-	@OneToMany(mappedBy = "user")
-	@Builder.Default
-	List<Participant> participants = new ArrayList<>();
+  @OneToMany(mappedBy = "user")
+  @Builder.Default
+  List<Participant> participants = new ArrayList<>();
 
-	@OneToMany(mappedBy = "sender")
-	@Builder.Default
-	List<Message> messages = new ArrayList<>();
+  @OneToMany(mappedBy = "sender")
+  @Builder.Default
+  List<Message> messages = new ArrayList<>();
 
-	@OneToMany(mappedBy = "userA")
-	@Builder.Default
-	List<Friend> friends1 = new ArrayList<>();
+  @OneToMany(mappedBy = "userA")
+  @Builder.Default
+  List<Friend> friends1 = new ArrayList<>();
 
-	@OneToMany(mappedBy = "userB")
-	@Builder.Default
-	List<Friend> friends2 = new ArrayList<>();
+  @OneToMany(mappedBy = "userB")
+  @Builder.Default
+  List<Friend> friends2 = new ArrayList<>();
 
-	@OneToMany(mappedBy = "fromUser")
-	@Builder.Default
-	List<FriendRequest> send = new ArrayList<>();
+  @OneToMany(mappedBy = "fromUser")
+  @Builder.Default
+  List<FriendRequest> send = new ArrayList<>();
 
-	@OneToMany(mappedBy = "toUser")
-	@Builder.Default
-	List<FriendRequest> recive = new ArrayList<>();
+  @OneToMany(mappedBy = "toUser")
+  @Builder.Default
+  List<FriendRequest> recive = new ArrayList<>();
 
-	@Id
-	@GeneratedValue(strategy = GenerationType.UUID)
-	String id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.UUID)
+  String id;
 
-	@Column(name = "username", nullable = true, unique = true)
-	String username;
+  @Column(name = "username", nullable = true, unique = true)
+  String username;
 
-	@Column(name = "password", nullable = true)
-	String password;
+  @Column(name = "password", nullable = true)
+  String password;
 
-	@Column(name = "displayName", nullable = false)
-	String displayName;
+  @Column(name = "displayName", nullable = false)
+  String displayName;
 
-	@Column(name = "birthday")
-	LocalDate birthday;
+  @Column(name = "birthday")
+  LocalDate birthday;
 
-	@Column(name = "email", nullable = false, unique = true)
-	String email;
+  @Column(name = "email", nullable = false, unique = true)
+  String email;
 
-	@Column(name = "email_verified")
-	@Builder.Default
-	boolean emailVerified = false;
+  @Column(name = "email_verified")
+  @Builder.Default
+  boolean emailVerified = false;
 
-	@Column(name = "phone", unique = true)
-	String phone;
+  @Column(name = "phone", unique = true)
+  String phone;
 
-	@Column(name = "phone_verified")
-	@Builder.Default
-	boolean phoneVerified = false;
+  @Column(name = "phone_verified")
+  @Builder.Default
+  boolean phoneVerified = false;
 
-	/**
-	 * Whether other people may see this user as online. Defaults to visible,
-	 * which is the behaviour every existing account already had.
-	 */
-	@Column(name = "show_online_status", nullable = false)
-	@Builder.Default
-	boolean showOnlineStatus = true;
+  /**
+   * Whether other people may see this user as online. Defaults to visible,
+   * which is the behaviour every existing account already had.
+   */
+  @Column(name = "show_online_status", nullable = false)
+  @Builder.Default
+  boolean showOnlineStatus = true;
 
-	@Column(name = "avatarUrl")
-	String avatarUrl;
+  @Column(name = "avatarUrl")
+  String avatarUrl;
 
-	@Column(name = "avatarId")
-	String avatarId;
+  @Column(name = "avatarId")
+  String avatarId;
 
-	@Column(name = "bio", length = 500)
-	String bio;
+  @Column(name = "bio", length = 500)
+  String bio;
 
-	@Column(name = "createdAt")
-	@CreatedDate
-	Instant createdAt;
+  @Column(name = "createdAt")
+  @CreatedDate
+  Instant createdAt;
 
-	@Column(name = "updatedAt")
-	@LastModifiedDate
-	Instant updatedAt;
+  @Column(name = "updatedAt")
+  @LastModifiedDate
+  Instant updatedAt;
 
-	@Override
-	public Collection<? extends GrantedAuthority> getAuthorities() {
-		return Collections.emptyList();
-	}
+  @Override
+  public Collection<? extends GrantedAuthority> getAuthorities() {
+    return Collections.emptyList();
+  }
 
 }

@@ -33,7 +33,36 @@
     <aws.java.sdk.version>2.X.X</aws.java.sdk.version>
 
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- AWS SDK for Java v2 BOM -->
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>bom</artifactId>
+        <version>2.50.2</version>        <!-- Thay thế bằng phiên bản mới nhất bạn muốn dùng -->
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
   <dependencies>
+
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>aws-java-sdk</artifactId>
+      <version>1.12.797</version>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>apache5-client</artifactId>
+    </dependency>
+
 
     <dependency>
 
