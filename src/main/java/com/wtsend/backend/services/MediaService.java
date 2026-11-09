@@ -40,7 +40,7 @@ public class MediaService implements IMediaService {
   private final MediaRepository repo;
   private final ApplicationEventPublisher events;
 
-  @Value("${storage.bucket}")
+  @Value("${aws.s3.bucket-name}")
   private String bucket;
 
   private static final Duration PUT_TTL = Duration.ofMinutes(10);
@@ -105,7 +105,7 @@ public class MediaService implements IMediaService {
     return toResponse(m);
   }
 
-  public MediaResponse get(UUID userId, UUID id) {
+  public MediaResponse get(String userId, UUID id) {
     Media m = repo.findById(id).orElseThrow(() -> new AppException(ErrorCode.MEDIA_NOT_FOUND));
     if (!m.getOwnerId().equals(userId))
       throw new AppException(ErrorCode.NOT_MEDIA_OWNER);

@@ -10,7 +10,8 @@ public record SendMessageRequest(
 
     String tempId,
 
-    @NotBlank(message = "Conversation id is required") String conversationId,
+    @NotBlank(message = "Conversation id is required") Long conversationId,
+
     String content,
 
     @NotNull(message = "Message type is required") MessageType messageType,

@@ -32,29 +32,27 @@ import lombok.Setter;
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "messages")
 public class Message implements Serializable {
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
 
-	private Long id;
+  private Long id;
 
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "senderId")
-	private User sender;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "senderId")
+  private User sender;
 
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "conversationId")
-	private Conversation conversation;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "conversationId")
+  private Conversation conversation;
 
-	@Column(columnDefinition = "TEXT")
-	private String content;
+  @Column(columnDefinition = "TEXT")
+  private String content;
 
-	private String imgUrl;
+  @Column(name = "createdAt")
+  @CreatedDate
+  private Instant createdAt;
 
-	@Column(name = "createdAt")
-	@CreatedDate
-	private Instant createdAt;
-
-	@Column(name = "updatedAt")
-	@LastModifiedDate
-	private Instant updatedAt;
+  @Column(name = "updatedAt")
+  @LastModifiedDate
+  private Instant updatedAt;
 }

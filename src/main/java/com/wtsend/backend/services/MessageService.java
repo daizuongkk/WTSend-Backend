@@ -15,6 +15,8 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.wtsend.backend.common.exception.AppException;
+import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.dto.request.SendDirectMessageRequest;
 import com.wtsend.backend.dto.request.SendGroupMessageRequest;
 import com.wtsend.backend.dto.response.ConversationResponse;
@@ -22,8 +24,6 @@ import com.wtsend.backend.dto.response.LastMessage;
 import com.wtsend.backend.dto.response.MessageResponse;
 import com.wtsend.backend.dto.response.MessagesResponse;
 import com.wtsend.backend.event.NewMessageEvent;
-import com.wtsend.backend.common.exception.AppException;
-import com.wtsend.backend.common.exception.ErrorCode;
 import com.wtsend.backend.libs.ConversationMapper;
 import com.wtsend.backend.libs.MessageCursor;
 import com.wtsend.backend.libs.MessageMapper;
@@ -99,8 +99,11 @@ public class MessageService implements IMessageService {
       conversation = existing;
     }
 
-    Message message = Message.builder().sender(sender).conversation(conversation)
-        .content(request.getContent()).imgUrl(request.getImgUrl()).build();
+    Message message = Message.builder()
+        .sender(sender)
+        .conversation(conversation)
+        .content(request.getContent())
+        .build();
     messageRepo.save(message);
 
     return publishNewMessage(conversation, message, senderId);
@@ -146,8 +149,12 @@ public class MessageService implements IMessageService {
 
     MessageHelper.checkMembership(conversation, sender);
 
-    Message message = Message.builder().sender(sender).conversation(conversation).content(request.getContent())
-        .imgUrl(request.getImgUrl()).build();
+    Message message = Message
+        .builder()
+        .sender(sender)
+        .conversation(conversation)
+        .content(request.getContent())
+        .build();
     messageRepo.save(message);
 
     return publishNewMessage(conversation, message, senderId);

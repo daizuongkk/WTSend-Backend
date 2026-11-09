@@ -36,39 +36,41 @@ import lombok.experimental.FieldDefaults;
 @EntityListeners(AuditingEntityListener.class)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class Participant implements Serializable {
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  Long id;
 
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "conversationId")
-	private Conversation conversation;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "conversationId")
+  private Conversation conversation;
 
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "userId")
-	User user;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "userId")
+  User user;
 
-	Instant lastReadAt;
+  Instant lastReadAt;
 
-	/**
-	 * Never null, and the default is load-bearing: the increment is SQL
-	 * arithmetic, so a NULL here would make every later increment a no-op and
-	 * kill this conversation's unread badge for good. V5 backfilled the existing
-	 * rows and made the column NOT NULL DEFAULT 0.
-	 */
-	@Column(nullable = false)
-	Long unreadCounts = 0L;
+  /**
+   * Never null, and the default is load-bearing: the increment is SQL
+   * arithmetic, so a NULL here would make every later increment a no-op and
+   * kill this conversation's unread badge for good. V5 backfilled the existing
+   * rows and made the column NOT NULL DEFAULT 0.
+   */
+  @Column(nullable = false)
+  @Builder.Default
+  Long unreadCounts = 0L;
 
-	Instant joinedAt;
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "lastSeenMessageId")
-	Message lastSeenMessage;
+  Instant joinedAt;
 
-	@Column(name = "createdAt")
-	@CreatedDate
-	Instant createdAt;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "lastSeenMessageId")
+  Message lastSeenMessage;
 
-	@Column(name = "updatedAt")
-	@LastModifiedDate
-	Instant updatedAt;
+  @Column(name = "createdAt")
+  @CreatedDate
+  Instant createdAt;
+
+  @Column(name = "updatedAt")
+  @LastModifiedDate
+  Instant updatedAt;
 }
