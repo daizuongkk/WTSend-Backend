@@ -16,13 +16,13 @@ import lombok.Getter;
 @Getter
 public class ConversationReadEvent {
 
-	private final Long conversationId;
-	private final ConversationResponse conversation;
-	private final LastMessage lastMessage;
+  private final Long conversationId;
+  private final ConversationResponse conversation;
+  private final LastMessage lastMessage;
 
-	public ConversationReadEvent(ConversationResponse conversation, LastMessage lastMessage) {
-		this.conversation = conversation;
-		this.conversationId = conversation.getId();
-		this.lastMessage = lastMessage;
-	}
+  public ConversationReadEvent(ConversationResponse conversation, LastMessage lastMessage) {
+    this.conversation = conversation;
+    this.conversationId = conversation.id();
+    this.lastMessage = lastMessage;
+  }
 }

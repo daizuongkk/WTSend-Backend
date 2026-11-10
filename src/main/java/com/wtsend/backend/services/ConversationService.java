@@ -66,11 +66,11 @@ public class ConversationService implements IConversationService {
   // the event silently, and new-group would simply stop being delivered.
   @Transactional
   public ConversationResponse createConversation(CreateConversationRequest request, String userId) {
-    ConversationType type = request.getType();
-    String name = request.getName();
+    ConversationType type = request.type();
+    String name = request.name();
     // The same id twice would build two Participant rows for one user and fail
     // on uk_participants_conversation_user.
-    List<String> memberIds = request.getMemberIds().stream().distinct().toList();
+    List<String> memberIds = request.memberIds().stream().distinct().toList();
 
     if (type.equals(ConversationType.DIRECT) && memberIds.size() > 1)
       throw new AppException(ErrorCode.CONVERSATION_INVALID_TYPE)

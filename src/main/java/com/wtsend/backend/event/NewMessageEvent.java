@@ -12,13 +12,13 @@ import lombok.Getter;
  */
 @Getter
 public class NewMessageEvent {
-	private final Long conversationId;
-	private final ConversationResponse conversation;
-	private final MessageResponse message;
+  private final Long conversationId;
+  private final ConversationResponse conversation;
+  private final MessageResponse message;
 
-	public NewMessageEvent(ConversationResponse conversation, MessageResponse message) {
-		this.conversation = conversation;
-		this.conversationId = conversation.getId();
-		this.message = message;
-	}
+  public NewMessageEvent(ConversationResponse conversation, MessageResponse message) {
+    this.conversation = conversation;
+    this.conversationId = conversation.id();
+    this.message = message;
+  }
 }

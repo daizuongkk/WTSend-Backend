@@ -25,55 +25,55 @@ import jakarta.validation.ValidatorFactory;
  */
 class CreateConversationRequestTest {
 
-	private static ValidatorFactory factory;
-	private static Validator validator;
+  private static ValidatorFactory factory;
+  private static Validator validator;
 
-	@BeforeAll
-	static void startValidator() {
-		factory = Validation.buildDefaultValidatorFactory();
-		validator = factory.getValidator();
-	}
+  @BeforeAll
+  static void startValidator() {
+    factory = Validation.buildDefaultValidatorFactory();
+    validator = factory.getValidator();
+  }
 
-	@AfterAll
-	static void closeValidator() {
-		factory.close();
-	}
+  @AfterAll
+  static void closeValidator() {
+    factory.close();
+  }
 
-	private static CreateConversationRequest request(ConversationType type, String name, List<String> memberIds) {
-		return CreateConversationRequest.builder().type(type).name(name).memberIds(memberIds).build();
-	}
+  private static CreateConversationRequest request(ConversationType type, String name, List<String> memberIds) {
+    return CreateConversationRequest.builder().type(type).name(name).memberIds(memberIds).build();
+  }
 
-	@Test
-	void anOrdinaryGroupIsAccepted() {
-		assertThat(validator.validate(request(ConversationType.GROUP, "Nhóm bạn", List.of("user-1", "user-2"))))
-				.isEmpty();
-	}
+  @Test
+  void anOrdinaryGroupIsAccepted() {
+    assertThat(validator.validate(request(ConversationType.GROUP, "Nhóm bạn", List.of("user-1", "user-2"))))
+        .isEmpty();
+  }
 
-	@Test
-	void aNullMemberIdIsRejected() {
-		// Reached participantId.equals(...) in createDirectConversation as an NPE,
-		// i.e. a 500 for a request that was simply malformed.
-		assertThat(validator.validate(request(ConversationType.DIRECT, null, Collections.singletonList(null))))
-				.hasSize(1);
-	}
+  @Test
+  void aNullMemberIdIsRejected() {
+    // Reached participantId.equals(...) in createDirectConversation as an NPE,
+    // i.e. a 500 for a request that was simply malformed.
+    assertThat(validator.validate(request(ConversationType.DIRECT, null, Collections.singletonList(null))))
+        .hasSize(1);
+  }
 
-	@Test
-	void aBlankMemberIdIsRejected() {
-		// Looked nobody up and silently produced a group one member short.
-		assertThat(validator.validate(request(ConversationType.GROUP, "Nhóm", List.of("user-1", "  "))))
-				.hasSize(1);
-	}
+  @Test
+  void aBlankMemberIdIsRejected() {
+    // Looked nobody up and silently produced a group one member short.
+    assertThat(validator.validate(request(ConversationType.GROUP, "Nhóm", List.of("user-1", "  "))))
+        .hasSize(1);
+  }
 
-	@Test
-	void anOverLongNameIsRejectedRatherThanTruncatedByTheDatabase() {
-		assertThat(validator.validate(request(ConversationType.GROUP, "x".repeat(256), List.of("user-1"))))
-				.hasSize(1);
-		assertThat(validator.validate(request(ConversationType.GROUP, "x".repeat(255), List.of("user-1"))))
-				.isEmpty();
-	}
+  @Test
+  void anOverLongNameIsRejectedRatherThanTruncatedByTheDatabase() {
+    assertThat(validator.validate(request(ConversationType.GROUP, "x".repeat(256), List.of("user-1"))))
+        .hasSize(1);
+    assertThat(validator.validate(request(ConversationType.GROUP, "x".repeat(255), List.of("user-1"))))
+        .isEmpty();
+  }
 
-	@Test
-	void anEmptyMemberListIsStillRejected() {
-		assertThat(validator.validate(request(ConversationType.GROUP, "Nhóm", List.of()))).hasSize(1);
-	}
+  @Test
+  void anEmptyMemberListIsStillRejected() {
+    assertThat(validator.validate(request(ConversationType.GROUP, "Nhóm", List.of()))).hasSize(1);
+  }
 }

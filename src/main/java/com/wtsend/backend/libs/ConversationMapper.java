@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import com.wtsend.backend.dto.response.ConversationResponse;
 import com.wtsend.backend.dto.response.GroupInfoResponse;
 import com.wtsend.backend.model.Conversation;
+import com.wtsend.backend.model.GroupInfo;
+import com.wtsend.backend.model.Message;
 
 import lombok.RequiredArgsConstructor;
 
@@ -13,24 +15,28 @@ import lombok.RequiredArgsConstructor;
 @Component
 public class ConversationMapper {
 
-	private final ModelMapper mapper;
-	private final ParticipantMapper participantMapper;
-	private final MessageMapper messageMapper;
+  private final ParticipantMapper participantMapper;
+  private final MessageMapper messageMapper;
 
-	public ConversationResponse toResponse(Conversation conversation) {
-		ConversationResponse response = mapper.map(conversation, ConversationResponse.class);
+  public ConversationResponse toResponse(Conversation conversation) {
 
-		if (conversation.getLastMessage() != null)
-			response.setLastMessage(messageMapper.toLastMessage(conversation.getLastMessage()));
+    GroupInfo groupInfo = conversation.getGroup();
+    Message lastMessage = conversation.getLastMessage();
 
-		response.setParticipants(conversation.getParticipants().stream().map(participantMapper::toResponse).toList());
-		response.setGroupInfo(conversation.getGroup() == null ? null
-				: GroupInfoResponse.builder()
-						.name(conversation.getGroup().getName())
-						.avatarUrl(conversation.getGroup().getAvatarUrl())
-						.creatorId(conversation.getGroup().getCreator().getId())
-						.build());
+    return ConversationResponse.builder()
+        .id(conversation.getId())
+        .type(conversation.getType().toString())
+        .groupInfo(conversation.getGroup() == null ? null
+            : GroupInfoResponse.builder()
+                .name(groupInfo.getName())
+                .avatarUrl(groupInfo.getAvatarUrl())
+                .creatorId(groupInfo.getCreator().getId())
+                .build())
 
-		return response;
-	}
+        .lastMessage(messageMapper.toLastMessage(lastMessage))
+        .lastMessageAt(conversation.getLastMessageAt())
+        .participants(conversation.getParticipants().stream().map(participantMapper::toResponse)
+            .toList())
+        .build();
+  }
 }

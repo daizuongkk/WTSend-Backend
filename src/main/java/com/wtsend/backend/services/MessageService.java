@@ -68,7 +68,7 @@ public class MessageService implements IMessageService {
       DataIntegrityViolationException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
   public MessageResponse sendDirectMessage(SendDirectMessageRequest request, String senderId) {
 
-    String recipientId = request.getRecipientId();
+    String recipientId = request.recipientId();
 
     if (!friendRepo.existsFriendship(senderId, recipientId))
       throw new AppException(ErrorCode.NOT_FRIENDS).withDetail("recipientId=" + recipientId);
@@ -79,7 +79,7 @@ public class MessageService implements IMessageService {
     User sender = userRepository.findById(senderId)
         .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + senderId));
 
-    Long requestedId = request.getConversationId();
+    Long requestedId = request.conversationId();
 
     Conversation conversation;
     if (requestedId == null) {
@@ -102,7 +102,7 @@ public class MessageService implements IMessageService {
     Message message = Message.builder()
         .sender(sender)
         .conversation(conversation)
-        .content(request.getContent())
+        .content(request.content())
         .build();
     messageRepo.save(message);
 
@@ -134,7 +134,7 @@ public class MessageService implements IMessageService {
   @Retryable(retryFor = { CannotAcquireLockException.class,
       PessimisticLockingFailureException.class }, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
   public MessageResponse sendGroupMessage(SendGroupMessageRequest request, String senderId) {
-    Long conversationId = request.getConversationId();
+    Long conversationId = request.conversationId();
 
     // WithGraph because checkMembership walks the participants and their users,
     // and a group is where that N+1 actually hurt.
@@ -153,7 +153,7 @@ public class MessageService implements IMessageService {
         .builder()
         .sender(sender)
         .conversation(conversation)
-        .content(request.getContent())
+        .content(request.content())
         .build();
     messageRepo.save(message);
 
@@ -191,8 +191,8 @@ public class MessageService implements IMessageService {
         conversationRepo.findByIdWithGraph(conversationId)
             .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND)
                 .withDetail("id=" + conversationId)));
-    conversationDto.setLastMessage(lastMessageDto);
-    conversationDto.setLastMessageAt(sentAt);
+    // conversationDto.setLastMessage(lastMessageDto);
+    // conversationDto.setLastMessageAt(sentAt);
 
     applicationEventPublisher.publishEvent(new NewMessageEvent(conversationDto, messageDto));
 

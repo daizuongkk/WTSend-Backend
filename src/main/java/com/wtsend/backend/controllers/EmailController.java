@@ -44,7 +44,7 @@ public class EmailController {
     // again -- attribute drift between a set and a later delete is a bug this
     // codebase has already had once.
     return ResponseEntity.ok()
-        .header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(response.getRefreshToken()).toString())
+        .header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(response.refreshToken()).toString())
         .body(response);
   }
 }

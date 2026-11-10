@@ -45,93 +45,93 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SocketRelay implements MessageListener {
 
-	static final String CHANNEL = "wtsend:socket:relay";
+  static final String CHANNEL = "wtsend:socket:relay";
 
-	/** Written by every instance, so it has to agree byte for byte. */
-	private final ObjectMapper json = SocketJson.mapper();
+  /** Written by every instance, so it has to agree byte for byte. */
+  private final ObjectMapper json = SocketJson.mapper();
 
-	private final SocketIOServer server;
-	private final StringRedisTemplate redis;
-	private final InstanceId instanceId;
+  private final SocketIOServer server;
+  private final StringRedisTemplate redis;
+  private final InstanceId instanceId;
 
-	public SocketRelay(SocketIOServer server, StringRedisTemplate redis, InstanceId instanceId) {
-		this.server = server;
-		this.redis = redis;
-		this.instanceId = instanceId;
-	}
+  public SocketRelay(SocketIOServer server, StringRedisTemplate redis, InstanceId instanceId) {
+    this.server = server;
+    this.redis = redis;
+    this.instanceId = instanceId;
+  }
 
-	/** Emits to one room here and on every other instance. */
-	public void toRoom(String room, String event, Object payload) {
-		toRooms(List.of(room), event, payload);
-	}
+  /** Emits to one room here and on every other instance. */
+  public void toRoom(String room, String event, Object payload) {
+    toRooms(List.of(room), event, payload);
+  }
 
-	/**
-	 * Emits to every member of a conversation, addressed by their personal
-	 * rooms.
-	 *
-	 * <p>
-	 * Not the conversation's own room, and that is the point. A personal room is
-	 * joined once at connect and never changes, while the conversation room has
-	 * to be joined -- so a conversation created after a client connected had
-	 * nobody in its room, and every message in it was delivered to no one until
-	 * that client reconnected. The first message to a new friend, the one that
-	 * creates the conversation, could never arrive in real time at all.
-	 */
-	public void toConversation(ConversationResponse conversation, String event, Object payload) {
-		toRooms(conversation.getParticipants().stream()
-				.map(ParticipantResponse::getUserId)
-				.map(SocketRooms::user)
-				.toList(), event, payload);
-	}
+  /**
+   * Emits to every member of a conversation, addressed by their personal
+   * rooms.
+   *
+   * <p>
+   * Not the conversation's own room, and that is the point. A personal room is
+   * joined once at connect and never changes, while the conversation room has
+   * to be joined -- so a conversation created after a client connected had
+   * nobody in its room, and every message in it was delivered to no one until
+   * that client reconnected. The first message to a new friend, the one that
+   * creates the conversation, could never arrive in real time at all.
+   */
+  public void toConversation(ConversationResponse conversation, String event, Object payload) {
+    toRooms(conversation.participants().stream()
+        .map(ParticipantResponse::userId)
+        .map(SocketRooms::user)
+        .toList(), event, payload);
+  }
 
-	/** Emits to several rooms here and on every other instance. */
-	public void toRooms(Collection<String> rooms, String event, Object payload) {
-		rooms.forEach(room -> server.getRoomOperations(room).sendEvent(event, payload));
-		publish(rooms, event, payload);
-	}
+  /** Emits to several rooms here and on every other instance. */
+  public void toRooms(Collection<String> rooms, String event, Object payload) {
+    rooms.forEach(room -> server.getRoomOperations(room).sendEvent(event, payload));
+    publish(rooms, event, payload);
+  }
 
-	/** Emits to every connected client, here and on every other instance. */
-	public void toAll(String event, Object payload) {
-		server.getBroadcastOperations().sendEvent(event, payload);
-		publish(null, event, payload);
-	}
+  /** Emits to every connected client, here and on every other instance. */
+  public void toAll(String event, Object payload) {
+    server.getBroadcastOperations().sendEvent(event, payload);
+    publish(null, event, payload);
+  }
 
-	private void publish(Collection<String> rooms, String event, Object payload) {
-		try {
-			// One envelope whatever the room count: a 50-member group would
-			// otherwise be 50 round trips to Redis for a single message.
-			Envelope envelope = new Envelope(instanceId.value(),
-					rooms == null ? null : List.copyOf(rooms), event, json.valueToTree(payload));
-			redis.convertAndSend(CHANNEL, json.writeValueAsString(envelope));
-		} catch (Exception e) {
-			// The local emission already happened, so clients on this instance are
-			// served either way. Rethrowing would only propagate into an
-			// AFTER_COMMIT listener, where it is swallowed.
-			log.error("Failed to relay {} to {}", event, rooms, e);
-		}
-	}
+  private void publish(Collection<String> rooms, String event, Object payload) {
+    try {
+      // One envelope whatever the room count: a 50-member group would
+      // otherwise be 50 round trips to Redis for a single message.
+      Envelope envelope = new Envelope(instanceId.value(),
+          rooms == null ? null : List.copyOf(rooms), event, json.valueToTree(payload));
+      redis.convertAndSend(CHANNEL, json.writeValueAsString(envelope));
+    } catch (Exception e) {
+      // The local emission already happened, so clients on this instance are
+      // served either way. Rethrowing would only propagate into an
+      // AFTER_COMMIT listener, where it is swallowed.
+      log.error("Failed to relay {} to {}", event, rooms, e);
+    }
+  }
 
-	@Override
-	public void onMessage(Message message, byte[] pattern) {
-		try {
-			Envelope envelope = json.readValue(message.getBody(), Envelope.class);
+  @Override
+  public void onMessage(Message message, byte[] pattern) {
+    try {
+      Envelope envelope = json.readValue(message.getBody(), Envelope.class);
 
-			// Our own publication comes back to us as a subscriber; emitting it
-			// again would deliver every message twice to the sender's own clients.
-			if (instanceId.value().equals(envelope.from()))
-				return;
+      // Our own publication comes back to us as a subscriber; emitting it
+      // again would deliver every message twice to the sender's own clients.
+      if (instanceId.value().equals(envelope.from()))
+        return;
 
-			if (envelope.rooms() == null)
-				server.getBroadcastOperations().sendEvent(envelope.event(), envelope.payload());
-			else
-				envelope.rooms().forEach(room -> server.getRoomOperations(room)
-						.sendEvent(envelope.event(), envelope.payload()));
-		} catch (Exception e) {
-			log.error("Failed to apply a relayed socket event", e);
-		}
-	}
+      if (envelope.rooms() == null)
+        server.getBroadcastOperations().sendEvent(envelope.event(), envelope.payload());
+      else
+        envelope.rooms().forEach(room -> server.getRoomOperations(room)
+            .sendEvent(envelope.event(), envelope.payload()));
+    } catch (Exception e) {
+      log.error("Failed to apply a relayed socket event", e);
+    }
+  }
 
-	/** {@code rooms == null} means every client rather than a set of rooms. */
-	record Envelope(String from, List<String> rooms, String event, JsonNode payload) {
-	}
+  /** {@code rooms == null} means every client rather than a set of rooms. */
+  record Envelope(String from, List<String> rooms, String event, JsonNode payload) {
+  }
 }

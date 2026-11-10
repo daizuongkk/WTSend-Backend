@@ -3,18 +3,19 @@ package com.wtsend.backend.services;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.wtsend.backend.dto.request.UpdateUserRequest;
-import com.wtsend.backend.event.OnlineVisibilityChangedEvent;
-import com.wtsend.backend.dto.response.UserResponse;
-import com.wtsend.backend.dto.response.UserSummaryResponse;
 import com.wtsend.backend.common.exception.AppException;
 import com.wtsend.backend.common.exception.ErrorCode;
+import com.wtsend.backend.dto.request.UpdateUserRequest;
+import com.wtsend.backend.dto.response.UserResponse;
+import com.wtsend.backend.dto.response.UserSummaryResponse;
+import com.wtsend.backend.event.OnlineVisibilityChangedEvent;
 import com.wtsend.backend.libs.utils.UserUtils;
 import com.wtsend.backend.model.User;
 import com.wtsend.backend.repository.UserRepository;
@@ -126,43 +127,39 @@ public class UserService implements IUserService {
     User existUser = userRepository.findById(userId)
         .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND).withDetail("id=" + userId));
 
-    if (request.getUsername() != null && !request.getUsername().equals(existUser.getUsername())) {
-      if (userRepository.existsByUsername(request.getUsername()))
+    if (request.username() != null && !request.username().equals(existUser.getUsername())) {
+      if (userRepository.existsByUsername(request.username()))
         throw new AppException(ErrorCode.USERNAME_ALREADY_EXISTS);
-      existUser.setUsername(request.getUsername());
+      existUser.setUsername(request.username());
     }
 
     // Email is intentionally not updatable. It used to reset emailVerified,
     // which gave "unverified" two meanings and would have put established
     // accounts in scope for the 24-hour deletion of abandoned registrations.
+    Optional.ofNullable(request.displayName()).ifPresent(existUser::setDisplayName);
+    Optional.ofNullable(request.phone()).ifPresent(existUser::setPhone);
+    Optional.ofNullable(request.bio()).ifPresent(existUser::setBio);
 
-    if (request.getDisplayName() != null)
-      existUser.setDisplayName(request.getDisplayName());
-    if (request.getPhone() != null)
-      existUser.setPhone(request.getPhone());
-    if (request.getBio() != null)
-      existUser.setBio(request.getBio());
-
-    if (request.getBirthday() != null) {
+    if (request.birthday() != null) {
       // Empty clears it, the same contract as phone.
-      existUser.setBirthday(request.getBirthday().isBlank()
+      existUser.setBirthday(request.birthday().isBlank()
           ? null
-          : LocalDate.parse(request.getBirthday(), BIRTHDAY_FORMAT));
+          : LocalDate.parse(request.birthday(), BIRTHDAY_FORMAT));
     }
 
     // Only on an actual change: without the comparison, editing a bio would
     // rebroadcast the user's presence to everyone.
-    boolean visibilityChanged = request.getShowOnlineStatus() != null
-        && request.getShowOnlineStatus() != existUser.isShowOnlineStatus();
+    boolean visibilityChanged = request.showOnlineStatus() != null
+        && request.showOnlineStatus() != existUser.isShowOnlineStatus();
     if (visibilityChanged)
-      existUser.setShowOnlineStatus(request.getShowOnlineStatus());
+      existUser.setShowOnlineStatus(request.showOnlineStatus());
 
     // Written onto the instance this method is about to save, not onto a second
     // one loaded elsewhere -- see applyUploadedAvatar for what that cost.
     String replacedAvatarId = null;
-    if (request.getAvatar() != null) {
+    if (request.avatar() != null) {
       replacedAvatarId = existUser.getAvatarId();
-      applyUploadedAvatar(existUser, request.getAvatar());
+      applyUploadedAvatar(existUser, request.avatar());
     }
 
     userRepository.save(existUser);

@@ -47,126 +47,126 @@ import com.wtsend.backend.repository.UserRepository;
 @ExtendWith(MockitoExtension.class)
 class ConversationCreationTest {
 
-	private static final String ALICE = "alice";
-	private static final String BOB = "bob";
+  private static final String ALICE = "alice";
+  private static final String BOB = "bob";
 
-	@Mock
-	private MessageMapper messageMapper;
-	@Mock
-	private ConversationRepository conversationRepo;
-	@Mock
-	private UserRepository userRepository;
-	@Mock
-	private FriendRepository friendRepo;
-	@Mock
-	private ConversationMapper conversationMapper;
-	@Mock
-	private ParticipantRepository participantRepo;
-	@Mock
-	private ApplicationEventPublisher eventPublisher;
+  @Mock
+  private MessageMapper messageMapper;
+  @Mock
+  private ConversationRepository conversationRepo;
+  @Mock
+  private UserRepository userRepository;
+  @Mock
+  private FriendRepository friendRepo;
+  @Mock
+  private ConversationMapper conversationMapper;
+  @Mock
+  private ParticipantRepository participantRepo;
+  @Mock
+  private ApplicationEventPublisher eventPublisher;
 
-	@InjectMocks
-	private ConversationService conversationService;
+  @InjectMocks
+  private ConversationService conversationService;
 
-	private User alice;
-	private User bob;
+  private User alice;
+  private User bob;
 
-	@BeforeEach
-	void setUp() {
-		alice = user(ALICE, "Alice");
-		bob = user(BOB, "Bob");
-	}
+  @BeforeEach
+  void setUp() {
+    alice = user(ALICE, "Alice");
+    bob = user(BOB, "Bob");
+  }
 
-	private static User user(String id, String displayName) {
-		User user = new User();
-		user.setId(id);
-		user.setDisplayName(displayName);
-		return user;
-	}
+  private static User user(String id, String displayName) {
+    User user = new User();
+    user.setId(id);
+    user.setDisplayName(displayName);
+    return user;
+  }
 
-	private static CreateConversationRequest request(ConversationType type, List<String> memberIds) {
-		return CreateConversationRequest.builder().type(type).memberIds(memberIds).build();
-	}
+  private static CreateConversationRequest request(ConversationType type, List<String> memberIds) {
+    return CreateConversationRequest.builder().type(type).memberIds(memberIds).build();
+  }
 
-	/** Everybody on the list is a friend of Alice and exists. */
-	private void aliceIsFriendsWith(List<User> members) {
-		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
-		when(friendRepo.findNonFriendsAmong(any(), any())).thenReturn(List.of());
-		when(userRepository.findAllById(any())).thenReturn(members);
-	}
+  /** Everybody on the list is a friend of Alice and exists. */
+  private void aliceIsFriendsWith(List<User> members) {
+    when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
+    when(friendRepo.findNonFriendsAmong(any(), any())).thenReturn(List.of());
+    when(userRepository.findAllById(any())).thenReturn(members);
+  }
 
-	@Test
-	void aMemberIdThatMatchesNoAccountIsReportedRatherThanDropped() {
-		when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
-		when(friendRepo.findNonFriendsAmong(any(), any())).thenReturn(List.of());
-		// Only Bob came back: "ghost" matches no row, and neither the stranger
-		// check nor findAllById has anything to say about that.
-		when(userRepository.findAllById(any())).thenReturn(List.of(bob));
+  @Test
+  void aMemberIdThatMatchesNoAccountIsReportedRatherThanDropped() {
+    when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
+    when(friendRepo.findNonFriendsAmong(any(), any())).thenReturn(List.of());
+    // Only Bob came back: "ghost" matches no row, and neither the stranger
+    // check nor findAllById has anything to say about that.
+    when(userRepository.findAllById(any())).thenReturn(List.of(bob));
 
-		assertThatThrownBy(() -> conversationService.createConversation(
-				request(ConversationType.GROUP, List.of(BOB, "ghost")), ALICE))
-				.isInstanceOf(AppException.class)
-				.extracting(e -> ((AppException) e).getErrorCode())
-				.isEqualTo(ErrorCode.USER_NOT_FOUND);
+    assertThatThrownBy(() -> conversationService.createConversation(
+        request(ConversationType.GROUP, List.of(BOB, "ghost")), ALICE))
+        .isInstanceOf(AppException.class)
+        .extracting(e -> ((AppException) e).getErrorCode())
+        .isEqualTo(ErrorCode.USER_NOT_FOUND);
 
-		verify(conversationRepo, never()).save(any());
-	}
+    verify(conversationRepo, never()).save(any());
+  }
 
-	@Test
-	void aDirectConversationWithMoreThanOneMemberIsRefused() {
-		// memberIds.get(0) was taken and the rest discarded in silence, so the
-		// caller got a DIRECT thread with one of the two people they asked for.
-		assertThatThrownBy(() -> conversationService.createConversation(
-				request(ConversationType.DIRECT, List.of(BOB, "carol")), ALICE))
-				.isInstanceOf(AppException.class)
-				.extracting(e -> ((AppException) e).getErrorCode())
-				.isEqualTo(ErrorCode.CONVERSATION_INVALID_TYPE);
+  @Test
+  void aDirectConversationWithMoreThanOneMemberIsRefused() {
+    // memberIds.get(0) was taken and the rest discarded in silence, so the
+    // caller got a DIRECT thread with one of the two people they asked for.
+    assertThatThrownBy(() -> conversationService.createConversation(
+        request(ConversationType.DIRECT, List.of(BOB, "carol")), ALICE))
+        .isInstanceOf(AppException.class)
+        .extracting(e -> ((AppException) e).getErrorCode())
+        .isEqualTo(ErrorCode.CONVERSATION_INVALID_TYPE);
 
-		verify(userRepository, never()).findById(any());
-	}
+    verify(userRepository, never()).findById(any());
+  }
 
-	@Test
-	void theSameMemberTwiceCountsOnce() {
-		aliceIsFriendsWith(List.of(bob));
-		when(conversationRepo.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-		when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
+  @Test
+  void theSameMemberTwiceCountsOnce() {
+    aliceIsFriendsWith(List.of(bob));
+    when(conversationRepo.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(conversationMapper.toResponse(any())).thenReturn(ConversationResponse.builder().build());
 
-		// Two Participant rows for one user would have failed on
-		// uk_participants_conversation_user.
-		conversationService.createConversation(request(ConversationType.GROUP, List.of(BOB, BOB)), ALICE);
+    // Two Participant rows for one user would have failed on
+    // uk_participants_conversation_user.
+    conversationService.createConversation(request(ConversationType.GROUP, List.of(BOB, BOB)), ALICE);
 
-		ArgumentCaptor<Conversation> saved = ArgumentCaptor.forClass(Conversation.class);
-		verify(conversationRepo).save(saved.capture());
-		assertThat(saved.getValue().getParticipants())
-				.extracting(participant -> participant.getUser().getId())
-				.containsExactlyInAnyOrder(ALICE, BOB);
-	}
+    ArgumentCaptor<Conversation> saved = ArgumentCaptor.forClass(Conversation.class);
+    verify(conversationRepo).save(saved.capture());
+    assertThat(saved.getValue().getParticipants())
+        .extracting(participant -> participant.getUser().getId())
+        .containsExactlyInAnyOrder(ALICE, BOB);
+  }
 
-	@Test
-	void aDirectConversationIsAnnouncedToo() {
-		aliceIsFriendsWith(List.of(bob));
-		when(conversationRepo.findByDirectKey(any())).thenReturn(Optional.empty());
-		when(conversationRepo.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-		when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
+  @Test
+  void aDirectConversationIsAnnouncedToo() {
+    aliceIsFriendsWith(List.of(bob));
+    when(conversationRepo.findByDirectKey(any())).thenReturn(Optional.empty());
+    when(conversationRepo.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(conversationMapper.toResponse(any())).thenReturn(ConversationResponse.builder().build());
 
-		conversationService.createConversation(request(ConversationType.DIRECT, List.of(BOB)), ALICE);
+    conversationService.createConversation(request(ConversationType.DIRECT, List.of(BOB)), ALICE);
 
-		// Only GROUP used to be published, so a DIRECT thread created and left
-		// without a message reached the other person on their next full load and
-		// not before: the first-message path that normally covers it had not run.
-		verify(eventPublisher).publishEvent(any(ConversationCreatedEvent.class));
-	}
+    // Only GROUP used to be published, so a DIRECT thread created and left
+    // without a message reached the other person on their next full load and
+    // not before: the first-message path that normally covers it had not run.
+    verify(eventPublisher).publishEvent(any(ConversationCreatedEvent.class));
+  }
 
-	@Test
-	void aGroupOfRealFriendsIsStillCreated() {
-		aliceIsFriendsWith(List.of(bob));
-		when(conversationRepo.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-		when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
+  @Test
+  void aGroupOfRealFriendsIsStillCreated() {
+    aliceIsFriendsWith(List.of(bob));
+    when(conversationRepo.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(conversationMapper.toResponse(any())).thenReturn(ConversationResponse.builder().build());
 
-		conversationService.createConversation(request(ConversationType.GROUP, List.of(BOB)), ALICE);
+    conversationService.createConversation(request(ConversationType.GROUP, List.of(BOB)), ALICE);
 
-		verify(conversationRepo).save(any());
-		// Every participant hears about it, the creator included.
-		verify(eventPublisher).publishEvent(any(ConversationCreatedEvent.class));
-	}
+    verify(conversationRepo).save(any());
+    // Every participant hears about it, the creator included.
+    verify(eventPublisher).publishEvent(any(ConversationCreatedEvent.class));
+  }
 }

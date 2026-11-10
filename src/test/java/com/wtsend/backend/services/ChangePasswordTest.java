@@ -29,81 +29,78 @@ import com.wtsend.backend.repository.UserRepository;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ChangePasswordTest {
 
-	private static final String USER_ID = "user-id";
+  private static final String USER_ID = "user-id";
 
-	@Mock
-	private UserRepository userRepository;
-	@Mock
-	private RefreshTokenService refreshTokenService;
-	@Mock
-	private PasswordEncoder passwordEncoder;
-	@Mock
-	private JwtService jwtService;
+  @Mock
+  private UserRepository userRepository;
+  @Mock
+  private RefreshTokenService refreshTokenService;
+  @Mock
+  private PasswordEncoder passwordEncoder;
+  @Mock
+  private JwtService jwtService;
 
-	@InjectMocks
-	private AuthService authService;
+  @InjectMocks
+  private AuthService authService;
 
-	private User userWithPassword(String stored) {
-		User user = new User();
-		user.setId(USER_ID);
-		user.setEmail("owner@example.com");
-		user.setPassword(stored);
-		when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-		return user;
-	}
+  private User userWithPassword(String stored) {
+    User user = new User();
+    user.setId(USER_ID);
+    user.setEmail("owner@example.com");
+    user.setPassword(stored);
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+    return user;
+  }
 
-	private static ChangePasswordRequest request(String current, String next) {
-		ChangePasswordRequest req = new ChangePasswordRequest();
-		req.setCurrentPassword(current);
-		req.setNewPassword(next);
-		return req;
-	}
+  private static ChangePasswordRequest request(String current, String next) {
+    return new ChangePasswordRequest(current, next);
+  }
 
-	@Test
-	void theDeviceThatChangedThePasswordKeepsWorking() {
-		// Every refresh token is revoked, this one included, so returning 204 left
-		// the client running until its access token expired and then dropped it at
-		// the login screen with no explanation.
-		User user = userWithPassword("{bcrypt}old");
-		when(passwordEncoder.matches("Current1!", "{bcrypt}old")).thenReturn(true);
-		when(passwordEncoder.encode("NewPass1!")).thenReturn("{bcrypt}new");
-		when(jwtService.generateToken(user)).thenReturn("access-token");
-		when(refreshTokenService.create(user))
-				.thenReturn(new RefreshTokenService.IssuedRefreshToken("refresh-token", "family-1"));
+  @Test
+  void theDeviceThatChangedThePasswordKeepsWorking() {
+    // Every refresh token is revoked, this one included, so returning 204 left
+    // the client running until its access token expired and then dropped it at
+    // the login screen with no explanation.
+    User user = userWithPassword("{bcrypt}old");
+    when(passwordEncoder.matches("Current1!", "{bcrypt}old")).thenReturn(true);
+    when(passwordEncoder.encode("NewPass1!")).thenReturn("{bcrypt}new");
+    when(jwtService.generateToken(user)).thenReturn("access-token");
+    when(refreshTokenService.create(user))
+        .thenReturn(new RefreshTokenService.IssuedRefreshToken("refresh-token", "family-1"));
 
-		AuthResponse res = authService.changePassword(request("Current1!", "NewPass1!"), USER_ID);
+    AuthResponse res = authService.changePassword(request("Current1!", "NewPass1!"), USER_ID);
 
-		// One marker instead of enumerating refresh tokens -- it also invalidates
-		// the access tokens already out there, which the old delete could not.
-		verify(refreshTokenService).revokeEverythingIssuedBefore(USER_ID);
-		assertThat(res.getAccessToken()).isEqualTo("access-token");
-		assertThat(res.getRefreshToken()).isEqualTo("refresh-token");
-		assertThat(user.getPassword()).isEqualTo("{bcrypt}new");
-	}
+    // One marker instead of enumerating refresh tokens -- it also invalidates
+    // the access tokens already out there, which the old delete could not.
+    verify(refreshTokenService).revokeEverythingIssuedBefore(USER_ID);
+    assertThat(res.accessToken()).isEqualTo("access-token");
+    assertThat(res.refreshToken()).isEqualTo("refresh-token");
+    assertThat(user.getPassword()).isEqualTo("{bcrypt}new");
+  }
 
-	@Test
-	void aWrongCurrentPasswordChangesNothing() {
-		userWithPassword("{bcrypt}old");
-		when(passwordEncoder.matches("guess", "{bcrypt}old")).thenReturn(false);
+  @Test
+  void aWrongCurrentPasswordChangesNothing() {
+    userWithPassword("{bcrypt}old");
+    when(passwordEncoder.matches("guess", "{bcrypt}old")).thenReturn(false);
 
-		assertThatThrownBy(() -> authService.changePassword(request("guess", "NewPass1!"), USER_ID))
-				.isInstanceOf(AppException.class)
-				.extracting(ex -> ((AppException) ex).getErrorCode())
-				.isEqualTo(ErrorCode.WRONG_CURRENT_PASSWORD);
+    assertThatThrownBy(() -> authService.changePassword(request("guess", "NewPass1!"), USER_ID))
+        .isInstanceOf(AppException.class)
+        .extracting(ex -> ((AppException) ex).getErrorCode())
+        .isEqualTo(ErrorCode.WRONG_CURRENT_PASSWORD);
 
-		verify(userRepository, never()).save(any());
-		verify(refreshTokenService, never()).revokeEverythingIssuedBefore(any());
-	}
+    verify(userRepository, never()).save(any());
+    verify(refreshTokenService, never()).revokeEverythingIssuedBefore(any());
+  }
 
-	@Test
-	void anAccountWithNoPasswordCannotChangeOne() {
-		// Created through Google. Setting a first password goes through the reset
-		// flow, which proves ownership of the mailbox.
-		userWithPassword(null);
+  @Test
+  void anAccountWithNoPasswordCannotChangeOne() {
+    // Created through Google. Setting a first password goes through the reset
+    // flow, which proves ownership of the mailbox.
+    userWithPassword(null);
 
-		assertThatThrownBy(() -> authService.changePassword(request("anything", "NewPass1!"), USER_ID))
-				.isInstanceOf(AppException.class)
-				.extracting(ex -> ((AppException) ex).getErrorCode())
-				.isEqualTo(ErrorCode.NO_PASSWORD_SET);
-	}
+    assertThatThrownBy(() -> authService.changePassword(request("anything", "NewPass1!"), USER_ID))
+        .isInstanceOf(AppException.class)
+        .extracting(ex -> ((AppException) ex).getErrorCode())
+        .isEqualTo(ErrorCode.NO_PASSWORD_SET);
+  }
 }

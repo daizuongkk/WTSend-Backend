@@ -1,7 +1,6 @@
 package com.wtsend.backend.dto.response;
 
 import lombok.Builder;
-import lombok.Getter;
 
 /**
  * What one user may see of another they have no relationship with.
@@ -17,11 +16,10 @@ import lombok.Getter;
  * search hit is by definition someone who is not a friend yet, and a type
  * named for the relationship would be wrong at every call site.
  */
-@Getter
 @Builder
-public class UserSummaryResponse {
-	private String id;
-	private String username;
-	private String displayName;
-	private String avatarUrl;
+public record UserSummaryResponse(
+    String id,
+    String username,
+    String displayName,
+    String avatarUrl) {
 }

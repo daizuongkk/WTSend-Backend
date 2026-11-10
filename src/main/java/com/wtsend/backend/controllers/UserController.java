@@ -74,7 +74,7 @@ public class UserController {
 
     AuthResponse res = authService.changePassword(request, jwt.getSubject());
     return ResponseEntity.ok()
-        .header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.getRefreshToken()).toString())
+        .header(HttpHeaders.SET_COOKIE, RefreshTokenCookie.of(res.refreshToken()).toString())
         .body(res);
   }
 

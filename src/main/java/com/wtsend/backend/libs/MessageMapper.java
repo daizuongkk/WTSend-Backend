@@ -1,6 +1,5 @@
 package com.wtsend.backend.libs;
 
-import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Component;
 
 import com.wtsend.backend.dto.response.LastMessage;
@@ -15,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 @Component
 public class MessageMapper {
 
-  private final ModelMapper mapper;
   private final UserUtils userUtils;
 
   public LastMessage toLastMessage(Message message) {
@@ -28,10 +26,18 @@ public class MessageMapper {
   }
 
   public MessageResponse toResponse(Message message) {
-    MessageResponse response = mapper.map(message, MessageResponse.class);
-    response.setSender(userUtils.toSender(message.getSender()));
-    response.setConversationId(message.getConversation().getId());
-    return response;
+
+    return MessageResponse.builder()
+        .id(message.getId())
+        .content(message.getContent())
+        .sender(userUtils.toSender(message
+            .getSender()))
+        .conversationId(message.getConversation().getId())
+
+        .media(null)
+        .createdAt(null)
+        .updatedAt(null)
+        .build();
   }
 
 }

@@ -32,66 +32,80 @@ import com.wtsend.backend.repository.UserRepository;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class UserServiceTest {
 
-	private static final String CALLER = "caller-id";
-	private static final String VICTIM_USERNAME = "victim-username";
+  private static final String CALLER = "caller-id";
+  private static final String VICTIM_USERNAME = "victim-username";
 
-	@Mock
-	private UserRepository userRepository;
-	@Mock
-	private UserUtils userMapper;
-	@Mock
-	private CloudinaryService cloudinary;
+  @Mock
+  private UserRepository userRepository;
+  @Mock
+  private UserUtils userMapper;
+  @Mock
+  private CloudinaryService cloudinary;
 
-	@InjectMocks
-	private UserService userService;
+  @InjectMocks
+  private UserService userService;
 
-	@Test
-	void updateUserWritesToTheAuthenticatedSubjectNotTheRequestBody() {
-		User caller = new User();
-		caller.setId(CALLER);
-		caller.setUsername("caller-username");
-		caller.setEmail("caller@example.com");
+  @Test
+  void updateUserWritesToTheAuthenticatedSubjectNotTheRequestBody() {
+    User caller = new User();
+    caller.setId(CALLER);
+    caller.setUsername("caller-username");
+    caller.setEmail("caller@example.com");
 
-		when(userRepository.findById(CALLER)).thenReturn(Optional.of(caller));
-		when(userRepository.existsByUsername(VICTIM_USERNAME)).thenReturn(false);
-		when(userMapper.toUserResponse(any(User.class))).thenReturn(new UserResponse());
+    when(userRepository.findById(CALLER)).thenReturn(Optional.of(caller));
+    when(userRepository.existsByUsername(VICTIM_USERNAME)).thenReturn(false);
+    when(userMapper.toUserResponse(any(User.class)))
+        .thenReturn(UserResponse.builder().build());
 
-		UpdateUserRequest request = new UpdateUserRequest();
-		request.setUsername(VICTIM_USERNAME);
-		request.setDisplayName("attacker");
+    UpdateUserRequest request = new UpdateUserRequest(
+        VICTIM_USERNAME,
+        null,
+        "attacker",
+        null,
+        null,
+        null,
+        null);
 
-		userService.updateUser(request, CALLER);
+    userService.updateUser(request, CALLER);
 
-		// The victim's record is never even looked up.
-		verify(userRepository, never()).findByUsername(VICTIM_USERNAME);
+    // The victim's record is never even looked up.
+    verify(userRepository, never()).findByUsername(VICTIM_USERNAME);
 
-		ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
-		verify(userRepository).save(saved.capture());
-		assertThat(saved.getValue().getId()).isEqualTo(CALLER);
-	}
+    ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+    verify(userRepository).save(saved.capture());
 
-	@Test
-	void updateUserLeavesTheEmailAndItsVerificationAlone() {
-		// The email used to be updatable, and changing it reset emailVerified. That
-		// gave "unverified" two meanings -- never verified, versus verified once and
-		// now changing address -- and the 24-hour cleanup of abandoned registrations
-		// cannot tell them apart, so an established account would have been deleted.
-		// It also let anyone move their account onto someone else's address.
-		User caller = new User();
-		caller.setId(CALLER);
-		caller.setEmail("owner@example.com");
-		ReflectionTestUtils.setField(caller, "emailVerified", true);
+    assertThat(saved.getValue().getId()).isEqualTo(CALLER);
+  }
 
-		when(userRepository.findById(CALLER)).thenReturn(Optional.of(caller));
-		when(userMapper.toUserResponse(any(User.class))).thenReturn(new UserResponse());
+  @Test
+  void updateUserLeavesTheEmailAndItsVerificationAlone() {
+    // The email used to be updatable, and changing it reset emailVerified. That
+    // gave "unverified" two meanings -- never verified, versus verified once and
+    // now changing address -- and the 24-hour cleanup of abandoned registrations
+    // cannot tell them apart, so an established account would have been deleted.
+    // It also let anyone move their account onto someone else's address.
+    User caller = new User();
+    caller.setId(CALLER);
+    caller.setEmail("owner@example.com");
+    ReflectionTestUtils.setField(caller, "emailVerified", true);
 
-		UpdateUserRequest request = new UpdateUserRequest();
-		request.setDisplayName("renamed");
+    when(userRepository.findById(CALLER)).thenReturn(Optional.of(caller));
+    when(userMapper.toUserResponse(any(User.class)))
+        .thenReturn(UserResponse.builder().build());
 
-		userService.updateUser(request, CALLER);
+    UpdateUserRequest request = new UpdateUserRequest(
+        null,
+        null,
+        "renamed",
+        null,
+        null,
+        null,
+        null);
 
-		assertThat(caller.getEmail()).isEqualTo("owner@example.com");
-		assertThat(caller.isEmailVerified()).isTrue();
-		verify(userRepository, never()).existsByEmail(any());
-	}
+    userService.updateUser(request, CALLER);
+
+    assertThat(caller.getEmail()).isEqualTo("owner@example.com");
+    assertThat(caller.isEmailVerified()).isTrue();
+    verify(userRepository, never()).existsByEmail(any());
+  }
 }

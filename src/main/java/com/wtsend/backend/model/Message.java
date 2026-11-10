@@ -2,6 +2,7 @@ package com.wtsend.backend.model;
 
 import java.io.Serializable;
 import java.time.Instant;
+import java.util.UUID;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -16,6 +17,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -34,8 +36,11 @@ import lombok.Setter;
 public class Message implements Serializable {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
-
   private Long id;
+
+  @OneToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "media_id", unique = true)
+  private Media media;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "senderId")
@@ -44,6 +49,9 @@ public class Message implements Serializable {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "conversationId")
   private Conversation conversation;
+
+  @Column(nullable = false)
+  private UUID clientMessageId;
 
   @Column(columnDefinition = "TEXT")
   private String content;

@@ -103,12 +103,15 @@ class MessageServiceTest {
   }
 
   /** The request DTO is deserialized by field access and exposes no setters. */
-  private static SendDirectMessageRequest directRequest(String recipientId, Long conversationId, String content) {
-    SendDirectMessageRequest r = new SendDirectMessageRequest();
-    ReflectionTestUtils.setField(r, "recipientId", recipientId);
-    ReflectionTestUtils.setField(r, "conversationId", conversationId);
-    ReflectionTestUtils.setField(r, "content", content);
-    return r;
+  private static SendDirectMessageRequest directRequest(
+      String recipientId,
+      Long conversationId,
+      String content) {
+    return new SendDirectMessageRequest(
+        recipientId,
+        conversationId,
+        content,
+        null);
   }
 
   private static Conversation directConversationOf(User... members) {
@@ -164,8 +167,8 @@ class MessageServiceTest {
     when(userRepository.findById(BOB)).thenReturn(Optional.of(bob));
     when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
     when(conversationRepo.findByIdWithGraph(CONVO_ID)).thenReturn(Optional.of(directConversationOf(alice, bob)));
-    when(conversationMapper.toResponse(any())).thenReturn(new com.wtsend.backend.dto.response.ConversationResponse());
-    when(messageMapper.toResponse(any())).thenReturn(new MessageResponse());
+    when(conversationMapper.toResponse(any())).thenReturn(ConversationResponse.builder().build());
+    when(messageMapper.toResponse(any())).thenReturn(MessageResponse.builder().build());
 
     SendDirectMessageRequest request = directRequest(BOB, CONVO_ID, "hello");
 
@@ -191,8 +194,8 @@ class MessageServiceTest {
       saved.setId(CONVO_ID);
       return saved;
     });
-    when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
-    when(messageMapper.toResponse(any())).thenReturn(new MessageResponse());
+    when(conversationMapper.toResponse(any())).thenReturn(ConversationResponse.builder().build());
+    when(messageMapper.toResponse(any())).thenReturn(MessageResponse.builder().build());
 
     messageService.sendDirectMessage(directRequest(BOB, null, "hi"), ALICE);
 
@@ -209,8 +212,8 @@ class MessageServiceTest {
     when(userRepository.findById(ALICE)).thenReturn(Optional.of(alice));
     when(conversationRepo.findByDirectKey(Conversation.directKeyOf(ALICE, BOB)))
         .thenReturn(Optional.of(directConversationOf(alice, bob)));
-    when(conversationMapper.toResponse(any())).thenReturn(new ConversationResponse());
-    when(messageMapper.toResponse(any())).thenReturn(new MessageResponse());
+    when(conversationMapper.toResponse(any())).thenReturn(ConversationResponse.builder().build());
+    when(messageMapper.toResponse(any())).thenReturn(MessageResponse.builder().build());
 
     messageService.sendDirectMessage(directRequest(BOB, null, "hi again"), ALICE);
 
@@ -326,21 +329,35 @@ class MessageServiceTest {
   private void stubCursorQueries(List<Message> history) {
     // Newest first, ties broken by descending id -- the repository's ORDER BY.
     List<Message> ordered = new ArrayList<>(history);
-    ordered.sort(java.util.Comparator.comparing(Message::getCreatedAt)
-        .thenComparing(Message::getId).reversed());
+    ordered.sort(
+        java.util.Comparator.comparing(Message::getCreatedAt)
+            .thenComparing(Message::getId)
+            .reversed());
 
     when(participantRepo.findByConversationIdAndUserId(eq(CONVO_ID), eq(ALICE)))
         .thenReturn(Optional.of(new Participant()));
-    when(messageMapper.toResponse(any(Message.class))).thenAnswer(inv -> {
-      MessageResponse r = new MessageResponse();
-      r.setId(((Message) inv.getArgument(0)).getId());
-      return r;
-    });
+
+    when(messageMapper.toResponse(any(Message.class))).thenAnswer(inv -> MessageResponse.builder()
+        .id(((Message) inv.getArgument(0)).getId())
+        .build());
+
     when(messageRepo.findNewestPage(eq(CONVO_ID), any(Pageable.class)))
-        .thenAnswer(inv -> page(ordered, null, null, inv.getArgument(1, Pageable.class).getPageSize()));
-    when(messageRepo.findPageOlderThan(eq(CONVO_ID), any(Instant.class), anyLong(), any(Pageable.class)))
-        .thenAnswer(inv -> page(ordered, inv.getArgument(1, Instant.class), inv.getArgument(2, Long.class),
-            inv.getArgument(3, Pageable.class).getPageSize()));
+        .thenAnswer(inv -> page(
+            ordered,
+            null,
+            null,
+            inv.getArgument(1, Pageable.class).getPageSize()));
+
+    when(messageRepo.findPageOlderThan(
+        eq(CONVO_ID),
+        any(Instant.class),
+        anyLong(),
+        any(Pageable.class))).thenAnswer(
+            inv -> page(
+                ordered,
+                inv.getArgument(1, Instant.class),
+                inv.getArgument(2, Long.class),
+                inv.getArgument(3, Pageable.class).getPageSize()));
   }
 
   /** Pages through the whole conversation and collects every id returned. */
@@ -349,7 +366,7 @@ class MessageServiceTest {
     String cursor = null;
     for (int guard = 0; guard < 20; guard++) {
       MessagesResponse res = messageService.getMessages(CONVO_ID, ALICE, pageSize, cursor);
-      res.getMessages().forEach(m -> seen.add(m.getId()));
+      res.getMessages().forEach(m -> seen.add(m.id()));
       cursor = res.getNextCursor();
       if (cursor == null)
         break;

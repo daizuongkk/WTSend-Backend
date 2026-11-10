@@ -46,8 +46,8 @@ class RequestDeserializationTest {
             {"email":"a@example.com","password":"Abcdef1!"}""",
         SignUpRequest.class);
 
-    assertThat(request.getEmail()).isEqualTo("a@example.com");
-    assertThat(request.getPassword()).isEqualTo("Abcdef1!");
+    assertThat(request.email()).isEqualTo("a@example.com");
+    assertThat(request.password()).isEqualTo("Abcdef1!");
   }
 
   @Test
@@ -57,8 +57,8 @@ class RequestDeserializationTest {
             {"email":"a@example.com","password":"Abcdef1!"}""",
         SignInRequest.class);
 
-    assertThat(request.getEmail()).isEqualTo("a@example.com");
-    assertThat(request.getPassword()).isEqualTo("Abcdef1!");
+    assertThat(request.email()).isEqualTo("a@example.com");
+    assertThat(request.password()).isEqualTo("Abcdef1!");
   }
 
   @Test
@@ -68,9 +68,9 @@ class RequestDeserializationTest {
             {"recipientId":"u-1","conversationId":7,"content":"xin chào","imgUrl":"https://x/y.png"}""",
         SendDirectMessageRequest.class);
 
-    assertThat(request.getRecipientId()).isEqualTo("u-1");
-    assertThat(request.getConversationId()).isEqualTo(7L);
-    assertThat(request.getContent()).isEqualTo("xin chào");
+    assertThat(request.recipientId()).isEqualTo("u-1");
+    assertThat(request.conversationId()).isEqualTo(7L);
+    assertThat(request.content()).isEqualTo("xin chào");
   }
 
   @Test
@@ -80,8 +80,8 @@ class RequestDeserializationTest {
             {"conversationId":7,"content":"xin chào","imgUrl":"https://x/y.png"}""",
         SendGroupMessageRequest.class);
 
-    assertThat(request.getConversationId()).isEqualTo(7L);
-    assertThat(request.getContent()).isEqualTo("xin chào");
+    assertThat(request.conversationId()).isEqualTo(7L);
+    assertThat(request.content()).isEqualTo("xin chào");
   }
 
   @Test
@@ -91,8 +91,8 @@ class RequestDeserializationTest {
             {"type":"GROUP","name":"nhóm 1","memberIds":["u-1","u-2"]}""",
         CreateConversationRequest.class);
 
-    assertThat(request.getName()).isEqualTo("nhóm 1");
-    assertThat(request.getMemberIds()).containsExactly("u-1", "u-2");
+    assertThat(request.name()).isEqualTo("nhóm 1");
+    assertThat(request.memberIds()).containsExactly("u-1", "u-2");
   }
 
   @Test
@@ -102,8 +102,8 @@ class RequestDeserializationTest {
             {"username":"someone1","displayName":"Ai Đó"}""",
         UpdateUserRequest.class);
 
-    assertThat(request.getUsername()).isEqualTo("someone1");
-    assertThat(request.getDisplayName()).isEqualTo("Ai Đó");
+    assertThat(request.username()).isEqualTo("someone1");
+    assertThat(request.displayName()).isEqualTo("Ai Đó");
   }
 
   @Test
@@ -113,8 +113,8 @@ class RequestDeserializationTest {
             {"to":"u-2","message":"kết bạn nhé"}""",
         AddFriendRequest.class);
 
-    assertThat(request.getTo()).isEqualTo("u-2");
-    assertThat(request.getMessage()).isEqualTo("kết bạn nhé");
+    assertThat(request.to()).isEqualTo("u-2");
+    assertThat(request.message()).isEqualTo("kết bạn nhé");
   }
 
   @Test
@@ -124,30 +124,30 @@ class RequestDeserializationTest {
             {"currentPassword":"Abcdef1!","newPassword":"Bcdefg2@"}""",
         ChangePasswordRequest.class);
 
-    assertThat(request.getCurrentPassword()).isEqualTo("Abcdef1!");
-    assertThat(request.getNewPassword()).isEqualTo("Bcdefg2@");
+    assertThat(request.currentPassword()).isEqualTo("Abcdef1!");
+    assertThat(request.newPassword()).isEqualTo("Bcdefg2@");
   }
 
   @Test
   void forgotAndResetPasswordRequestsReadTheirFields() {
     assertThat(json.readValue("""
-        {"email":"a@example.com"}""", ForgotPasswordRequest.class).getEmail())
+        {"email":"a@example.com"}""", ForgotPasswordRequest.class).email())
         .isEqualTo("a@example.com");
 
     ResetPasswordRequest reset = json.readValue("""
         {"token":"t-1","newPassword":"Bcdefg2@"}""", ResetPasswordRequest.class);
-    assertThat(reset.getToken()).isEqualTo("t-1");
-    assertThat(reset.getNewPassword()).isEqualTo("Bcdefg2@");
+    assertThat(reset.token()).isEqualTo("t-1");
+    assertThat(reset.newPassword()).isEqualTo("Bcdefg2@");
   }
 
   @Test
   void oauthRequestsReadTheirFields() {
     assertThat(json.readValue("""
-        {"code":"auth-code"}""", GoogleAuthRequest.class).getCode())
+        {"code":"auth-code"}""", GoogleAuthRequest.class).code())
         .isEqualTo("auth-code");
 
     assertThat(json.readValue("""
-        {"accessToken":"fb-token"}""", FacebookAuthRequest.class).getAccessToken())
+        {"accessToken":"fb-token"}""", FacebookAuthRequest.class).accessToken())
         .isEqualTo("fb-token");
   }
 }

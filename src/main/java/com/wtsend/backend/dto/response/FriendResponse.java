@@ -1,20 +1,11 @@
 package com.wtsend.backend.dto.response;
 
-import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
-public class FriendResponse {
-	private String id;
-	private String username;
-	private String displayName;
-	private String avatarUrl;
-
+public record FriendResponse(
+    String id,
+    String username,
+    String displayName,
+    String avatarUrl) {
 }

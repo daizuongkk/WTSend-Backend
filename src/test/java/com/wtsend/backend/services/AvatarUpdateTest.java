@@ -41,128 +41,158 @@ import com.wtsend.backend.repository.UserRepository;
 @ExtendWith(MockitoExtension.class)
 class AvatarUpdateTest {
 
-	private static final String USER_ID = "user-1";
+  private static final String USER_ID = "user-1";
 
-	@Mock
-	private UserRepository userRepository;
-	@Mock
-	private UserUtils userMapper;
-	@Mock
-	private CloudinaryService cloudinary;
-	@Mock
-	private ApplicationEventPublisher eventPublisher;
+  @Mock
+  private UserRepository userRepository;
+  @Mock
+  private UserUtils userMapper;
+  @Mock
+  private CloudinaryService cloudinary;
+  @Mock
+  private ApplicationEventPublisher eventPublisher;
 
-	@InjectMocks
-	private UserService userService;
+  @InjectMocks
+  private UserService userService;
 
-	private User stored;
+  private User stored;
 
-	@BeforeEach
-	void setUp() {
-		stored = new User();
-		stored.setId(USER_ID);
-		stored.setDisplayName("Ai Đó");
-		stored.setAvatarUrl("https://res.cloudinary.com/x/old.png");
-		stored.setAvatarId("wtsend/avatars/old");
-	}
+  @BeforeEach
+  void setUp() {
+    stored = new User();
+    stored.setId(USER_ID);
+    stored.setDisplayName("Ai Đó");
+    stored.setAvatarUrl("https://res.cloudinary.com/x/old.png");
+    stored.setAvatarId("wtsend/avatars/old");
+  }
 
-	private MockMultipartFile anImage() {
-		return new MockMultipartFile("avatar", "new.png", "image/png", new byte[] { 1, 2, 3 });
-	}
+  private MockMultipartFile anImage() {
+    return new MockMultipartFile("avatar", "new.png", "image/png", new byte[] { 1, 2, 3 });
+  }
 
-	@Test
-	void updatingWithAnAvatarKeepsTheNewAssetAndDestroysOnlyTheOldOne() {
-		when(userRepository.findById(USER_ID)).thenReturn(Optional.of(stored));
-		when(cloudinary.upload(any())).thenAnswer(inv -> Map.of(
-				"secure_url", "https://res.cloudinary.com/x/new.png",
-				"public_id", "wtsend/avatars/new"));
+  @Test
+  void updatingWithAnAvatarKeepsTheNewAssetAndDestroysOnlyTheOldOne() {
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(stored));
+    when(cloudinary.upload(any())).thenAnswer(inv -> Map.of(
+        "secure_url", "https://res.cloudinary.com/x/new.png",
+        "public_id", "wtsend/avatars/new"));
 
-		UpdateUserRequest request = new UpdateUserRequest();
-		request.setAvatar(anImage());
-		request.setBio("xin chào");
+    UpdateUserRequest request = new UpdateUserRequest(
+        null,
+        anImage(),
+        null,
+        null,
+        null,
+        "xin chào",
+        null);
 
-		userService.updateUser(request, USER_ID);
+    userService.updateUser(request, USER_ID);
 
-		// The row that gets saved must carry the NEW asset. It used to be saved
-		// with the old values, pointing at an asset that had just been deleted.
-		assertThat(stored.getAvatarUrl()).isEqualTo("https://res.cloudinary.com/x/new.png");
-		assertThat(stored.getAvatarId()).isEqualTo("wtsend/avatars/new");
-		assertThat(stored.getBio()).isEqualTo("xin chào");
+    // The row that gets saved must carry the NEW asset. It used to be saved
+    // with the old values, pointing at an asset that had just been deleted.
+    assertThat(stored.getAvatarUrl())
+        .isEqualTo("https://res.cloudinary.com/x/new.png");
+    assertThat(stored.getAvatarId()).isEqualTo("wtsend/avatars/new");
+    assertThat(stored.getBio()).isEqualTo("xin chào");
 
-		// Saved once, and the destroy happens after it -- not before, or a failed
-		// save would leave the row pointing at a deleted asset.
-		InOrder order = inOrder(userRepository, cloudinary);
-		order.verify(userRepository).save(stored);
-		order.verify(cloudinary).destroyQuietly("wtsend/avatars/old");
-	}
+    // Saved once, and the destroy happens after it -- not before, or a failed
+    // save would leave the row pointing at a deleted asset.
+    InOrder order = inOrder(userRepository, cloudinary);
+    order.verify(userRepository).save(stored);
+    order.verify(cloudinary).destroyQuietly("wtsend/avatars/old");
+  }
 
-	@Test
-	void aFirstEverUploadDoesNotRevertToNullAndDestroysNothing() {
-		stored.setAvatarUrl(null);
-		stored.setAvatarId(null);
-		when(userRepository.findById(USER_ID)).thenReturn(Optional.of(stored));
-		when(cloudinary.upload(any())).thenAnswer(inv -> Map.of(
-				"secure_url", "https://res.cloudinary.com/x/first.png",
-				"public_id", "wtsend/avatars/first"));
+  @Test
+  void aFirstEverUploadDoesNotRevertToNullAndDestroysNothing() {
+    stored.setAvatarUrl(null);
+    stored.setAvatarId(null);
 
-		UpdateUserRequest request = new UpdateUserRequest();
-		request.setAvatar(anImage());
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(stored));
+    when(cloudinary.upload(any())).thenAnswer(inv -> Map.of(
+        "secure_url", "https://res.cloudinary.com/x/first.png",
+        "public_id", "wtsend/avatars/first"));
 
-		userService.updateUser(request, USER_ID);
+    UpdateUserRequest request = new UpdateUserRequest(
+        null,
+        anImage(),
+        null,
+        null,
+        null,
+        null,
+        null);
 
-		// This was the worse half: nothing to destroy, but the row reverted to
-		// NULL, so the avatar silently never saved.
-		assertThat(stored.getAvatarUrl()).isEqualTo("https://res.cloudinary.com/x/first.png");
-		verify(cloudinary).destroyQuietly(null);
-	}
+    userService.updateUser(request, USER_ID);
 
-	@Test
-	void anUpdateWithNoAvatarTouchesCloudinaryNotAtAll() {
-		when(userRepository.findById(USER_ID)).thenReturn(Optional.of(stored));
+    // This was the worse half: nothing to destroy, but the row reverted to
+    // NULL, so the avatar silently never saved.
+    assertThat(stored.getAvatarUrl())
+        .isEqualTo("https://res.cloudinary.com/x/first.png");
 
-		UpdateUserRequest request = new UpdateUserRequest();
-		request.setBio("chỉ đổi bio");
+    verify(cloudinary).destroyQuietly(null);
+  }
 
-		userService.updateUser(request, USER_ID);
+  @Test
+  void anUpdateWithNoAvatarTouchesCloudinaryNotAtAll() {
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(stored));
 
-		verify(cloudinary, never()).upload(any());
-		verify(cloudinary).destroyQuietly(null);
-		assertThat(stored.getAvatarId()).isEqualTo("wtsend/avatars/old");
-	}
+    UpdateUserRequest request = new UpdateUserRequest(
+        null,
+        null,
+        null,
+        null,
+        null,
+        "chỉ đổi bio",
+        null);
 
-	@Test
-	void anUploadResponseMissingAFieldIsReportedRatherThanDereferenced() {
-		when(userRepository.findById(USER_ID)).thenReturn(Optional.of(stored));
-		// A successful upload whose response has no secure_url: used to NPE into
-		// a 500 with the asset already uploaded and billed, and nothing recorded,
-		// so it could never be destroyed.
-		when(cloudinary.upload(any())).thenAnswer(inv -> Map.of("public_id", "wtsend/avatars/new"));
+    userService.updateUser(request, USER_ID);
 
-		UpdateUserRequest request = new UpdateUserRequest();
-		request.setAvatar(anImage());
+    verify(cloudinary, never()).upload(any());
+    verify(cloudinary).destroyQuietly(null);
 
-		assertThatThrownBy(() -> userService.updateUser(request, USER_ID))
-				.isInstanceOf(AppException.class)
-				.extracting(e -> ((AppException) e).getErrorCode())
-				.isEqualTo(ErrorCode.FILE_UPLOAD_FAILED);
+    assertThat(stored.getAvatarId()).isEqualTo("wtsend/avatars/old");
+  }
 
-		verify(userRepository, never()).save(any());
-	}
+  @Test
+  void anUploadResponseMissingAFieldIsReportedRatherThanDereferenced() {
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(stored));
 
-	@Test
-	void theStandaloneUploadEndpointStillWorksOnItsOwn() {
-		when(userRepository.findById(USER_ID)).thenReturn(Optional.of(stored));
-		when(cloudinary.upload(any())).thenAnswer(inv -> Map.of(
-				"secure_url", "https://res.cloudinary.com/x/new.png",
-				"public_id", "wtsend/avatars/new"));
+    // A successful upload whose response has no secure_url: used to NPE into
+    // a 500 with the asset already uploaded and billed, and nothing recorded,
+    // so it could never be destroyed.
+    when(cloudinary.upload(any()))
+        .thenAnswer(inv -> Map.of("public_id", "wtsend/avatars/new"));
 
-		// POST /api/users/upload is used by another client, so splitting the
-		// Cloudinary call out of it must not change what it does.
-		String url = userService.uploadAvatar(anImage(), USER_ID);
+    UpdateUserRequest request = new UpdateUserRequest(
+        null,
+        anImage(),
+        null,
+        null,
+        null,
+        null,
+        null);
 
-		assertThat(url).isEqualTo("https://res.cloudinary.com/x/new.png");
-		InOrder order = inOrder(userRepository, cloudinary);
-		order.verify(userRepository).save(stored);
-		order.verify(cloudinary).destroyQuietly("wtsend/avatars/old");
-	}
+    assertThatThrownBy(() -> userService.updateUser(request, USER_ID))
+        .isInstanceOf(AppException.class)
+        .extracting(e -> ((AppException) e).getErrorCode())
+        .isEqualTo(ErrorCode.FILE_UPLOAD_FAILED);
+
+    verify(userRepository, never()).save(any());
+  }
+
+  @Test
+  void theStandaloneUploadEndpointStillWorksOnItsOwn() {
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(stored));
+    when(cloudinary.upload(any())).thenAnswer(inv -> Map.of(
+        "secure_url", "https://res.cloudinary.com/x/new.png",
+        "public_id", "wtsend/avatars/new"));
+
+    // POST /api/users/upload is used by another client, so splitting the
+    // Cloudinary call out of it must not change what it does.
+    String url = userService.uploadAvatar(anImage(), USER_ID);
+
+    assertThat(url).isEqualTo("https://res.cloudinary.com/x/new.png");
+    InOrder order = inOrder(userRepository, cloudinary);
+    order.verify(userRepository).save(stored);
+    order.verify(cloudinary).destroyQuietly("wtsend/avatars/old");
+  }
 }

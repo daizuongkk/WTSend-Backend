@@ -25,28 +25,28 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ConversationNotificationListener {
 
-	private final SocketRelay relay;
+  private final SocketRelay relay;
 
-	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-	public void onConversationCreated(ConversationCreatedEvent event) {
-		try {
-			relay.toRooms(event.getRecipientUserIds().stream().map(SocketRooms::user).toList(),
-					"new-group", event.getConversation());
-		} catch (Exception e) {
-			// Already committed, so there is nothing to roll back and Spring would
-			// swallow this silently.
-			log.error("Failed to broadcast new-group for conversation {}", event.getConversation().getId(), e);
-		}
-	}
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+  public void onConversationCreated(ConversationCreatedEvent event) {
+    try {
+      relay.toRooms(event.getRecipientUserIds().stream().map(SocketRooms::user).toList(),
+          "new-group", event.getConversation());
+    } catch (Exception e) {
+      // Already committed, so there is nothing to roll back and Spring would
+      // swallow this silently.
+      log.error("Failed to broadcast new-group for conversation {}", event.getConversation().id(), e);
+    }
+  }
 
-	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-	public void onConversationRead(ConversationReadEvent event) {
-		try {
-			relay.toConversation(event.getConversation(), "read-message", Map.of(
-					"conversation", event.getConversation(),
-					"lastMessage", event.getLastMessage()));
-		} catch (Exception e) {
-			log.error("Failed to broadcast read-message for conversation {}", event.getConversationId(), e);
-		}
-	}
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+  public void onConversationRead(ConversationReadEvent event) {
+    try {
+      relay.toConversation(event.getConversation(), "read-message", Map.of(
+          "conversation", event.getConversation(),
+          "lastMessage", event.getLastMessage()));
+    } catch (Exception e) {
+      log.error("Failed to broadcast read-message for conversation {}", event.getConversationId(), e);
+    }
+  }
 }

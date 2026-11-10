@@ -41,100 +41,106 @@ import com.wtsend.backend.services.UserService;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class PresenceScopeTest {
 
-	private static final String ALICE = "alice";
+  private static final String ALICE = "alice";
 
-	@Mock
-	private UserService userService;
-	@Mock
-	private RedisPresenceStore onlineUsers;
-	@Mock
-	private ConversationService conversationService;
-	@Mock
-	private PresenceAnnouncer announcer;
+  @Mock
+  private UserService userService;
+  @Mock
+  private RedisPresenceStore onlineUsers;
+  @Mock
+  private ConversationService conversationService;
+  @Mock
+  private PresenceAnnouncer announcer;
 
-	@InjectMocks
-	private UserSessionService userSession;
+  @InjectMocks
+  private UserSessionService userSession;
 
-	@Mock
-	private SocketIOClient client;
+  @Mock
+  private SocketIOClient client;
 
-	private UserResponse alice;
+  private UserResponse alice;
 
-	@BeforeEach
-	void setUp() {
-		alice = new UserResponse();
-		alice.setId(ALICE);
-		alice.setUsername("alice");
-		alice.setShowOnlineStatus(true);
+  @BeforeEach
+  void setUp() {
+    alice = UserResponse.builder()
+        .id(ALICE)
+        .username("alice")
+        .showOnlineStatus(true)
+        .build();
 
-		when(client.getSessionId()).thenReturn(UUID.randomUUID());
-		when(userService.findById(ALICE)).thenReturn(alice);
-		when(conversationService.getConversationIdsByUserId(ALICE)).thenReturn(List.of());
-	}
+    when(client.getSessionId()).thenReturn(UUID.randomUUID());
+    when(userService.findById(ALICE)).thenReturn(alice);
+    when(conversationService.getConversationIdsByUserId(ALICE)).thenReturn(List.of());
+  }
 
-	private void connect() {
-		userSession.onClientConnected(ALICE, client);
-	}
+  private void connect() {
+    userSession.onClientConnected(ALICE, client);
+  }
 
-	@Test
-	void theSnapshotHoldsOnlyPeopleTheArrivingUserMaySee() {
-		when(announcer.audienceFor(ALICE)).thenReturn(List.of("friend-1", "friend-2"));
-		when(onlineUsers.onlineUserIds()).thenReturn(Set.of("friend-1", "a-stranger", ALICE));
-		when(onlineUsers.add(eq(ALICE), any(), eq(true))).thenReturn(true);
+  @Test
+  void theSnapshotHoldsOnlyPeopleTheArrivingUserMaySee() {
+    when(announcer.audienceFor(ALICE)).thenReturn(List.of("friend-1", "friend-2"));
+    when(onlineUsers.onlineUserIds()).thenReturn(Set.of("friend-1", "a-stranger", ALICE));
+    when(onlineUsers.add(eq(ALICE), any(), eq(true))).thenReturn(true);
 
-		connect();
+    connect();
 
-		ArgumentCaptor<Object> snapshot = ArgumentCaptor.forClass(Object.class);
-		verify(client).sendEvent(eq("online-users"), snapshot.capture());
+    ArgumentCaptor<Object> snapshot = ArgumentCaptor.forClass(Object.class);
+    verify(client).sendEvent(eq("online-users"), snapshot.capture());
 
-		// friend-2 is not online, a-stranger is nothing to Alice.
-		@SuppressWarnings("unchecked")
-		Set<String> visible = (Set<String>) snapshot.getValue();
-		assertThat(visible).containsExactly("friend-1");
-	}
+    // friend-2 is not online, a-stranger is nothing to Alice.
+    @SuppressWarnings("unchecked")
+    Set<String> visible = (Set<String>) snapshot.getValue();
+    assertThat(visible).containsExactly("friend-1");
+  }
 
-	@Test
-	void anArrivalIsAnnouncedToThatAudienceAndNobodyElse() {
-		List<String> audience = List.of("friend-1");
-		when(announcer.audienceFor(ALICE)).thenReturn(audience);
-		when(onlineUsers.onlineUserIds()).thenReturn(Set.of());
-		when(onlineUsers.add(eq(ALICE), any(), eq(true))).thenReturn(true);
+  @Test
+  void anArrivalIsAnnouncedToThatAudienceAndNobodyElse() {
+    List<String> audience = List.of("friend-1");
+    when(announcer.audienceFor(ALICE)).thenReturn(audience);
+    when(onlineUsers.onlineUserIds()).thenReturn(Set.of());
+    when(onlineUsers.add(eq(ALICE), any(), eq(true))).thenReturn(true);
 
-		connect();
+    connect();
 
-		verify(announcer).announce(ALICE, audience, true);
-	}
+    verify(announcer).announce(ALICE, audience, true);
+  }
 
-	@Test
-	void auserWithNobodyToTellIsNotAnnouncedAtAll() {
-		when(announcer.audienceFor(ALICE)).thenReturn(List.of());
-		when(onlineUsers.onlineUserIds()).thenReturn(Set.of());
-		when(onlineUsers.add(eq(ALICE), any(), eq(true))).thenReturn(true);
+  @Test
+  void auserWithNobodyToTellIsNotAnnouncedAtAll() {
+    when(announcer.audienceFor(ALICE)).thenReturn(List.of());
+    when(onlineUsers.onlineUserIds()).thenReturn(Set.of());
+    when(onlineUsers.add(eq(ALICE), any(), eq(true))).thenReturn(true);
 
-		connect();
+    connect();
 
-		// An account with no friends and no conversations: there is no audience,
-		// and the announcer is what refuses to broadcast to one.
-		verify(announcer).announce(eq(ALICE), eq(List.of()), eq(true));
-	}
+    // An account with no friends and no conversations: there is no audience,
+    // and the announcer is what refuses to broadcast to one.
+    verify(announcer).announce(eq(ALICE), eq(List.of()), eq(true));
+  }
 
-	@Test
-	void aHiddenUserIsStillNotAnnounced() {
-		alice.setShowOnlineStatus(false);
-		when(announcer.audienceFor(ALICE)).thenReturn(List.of("friend-1"));
-		when(onlineUsers.onlineUserIds()).thenReturn(Set.of());
-		when(onlineUsers.add(eq(ALICE), any(), eq(false))).thenReturn(true);
+  @Test
+  void aHiddenUserIsStillNotAnnounced() {
+    alice = UserResponse.builder()
+        .id(ALICE)
+        .username("alice")
+        .showOnlineStatus(false)
+        .build();
 
-		connect();
+    when(announcer.audienceFor(ALICE)).thenReturn(List.of("friend-1"));
+    when(onlineUsers.onlineUserIds()).thenReturn(Set.of());
+    when(onlineUsers.add(eq(ALICE), any(), eq(false))).thenReturn(true);
 
-		verify(announcer, never()).announce(any(), anyList(), anyBoolean());
-	}
+    connect();
 
-	@Test
-	void aHandshakeThatCarriedNoIdentityIsDisconnected() {
-		userSession.onClientConnected(null, client);
+    verify(announcer, never()).announce(any(), anyList(), anyBoolean());
+  }
 
-		verify(client).disconnect();
-		verify(userService, never()).findById(any());
-	}
+  @Test
+  void aHandshakeThatCarriedNoIdentityIsDisconnected() {
+    userSession.onClientConnected(null, client);
+
+    verify(client).disconnect();
+    verify(userService, never()).findById(any());
+  }
 }

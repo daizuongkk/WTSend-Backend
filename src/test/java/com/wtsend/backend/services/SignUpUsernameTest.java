@@ -35,76 +35,76 @@ import com.wtsend.backend.repository.UserRepository;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class SignUpUsernameTest {
 
-	@Mock
-	private UserRepository userRepository;
-	@Mock
-	private UserUtils userMapper;
-	@Mock
-	private ApplicationEventPublisher eventPublisher;
+  @Mock
+  private UserRepository userRepository;
+  @Mock
+  private UserUtils userMapper;
+  @Mock
+  private ApplicationEventPublisher eventPublisher;
 
-	@InjectMocks
-	private AuthService authService;
+  @InjectMocks
+  private AuthService authService;
 
-	/** What the real mapper produces for this address, padded to the minimum. */
-	private static final String DERIVED = "john0000";
+  /** What the real mapper produces for this address, padded to the minimum. */
+  private static final String DERIVED = "john0000";
 
-	private SignUpRequest signUp() {
-		return SignUpRequest.builder().email("john@gmail.com").password("Passw0rd!").build();
-	}
+  private SignUpRequest signUp() {
+    return SignUpRequest.builder().email("john@gmail.com").password("Passw0rd!").build();
+  }
 
-	private User mappedWith(String username) {
-		User user = new User();
-		user.setEmail("john@gmail.com");
-		user.setDisplayName("john");
-		user.setUsername(username);
-		return user;
-	}
+  private User mappedWith(String username) {
+    User user = new User();
+    user.setEmail("john@gmail.com");
+    user.setDisplayName("john");
+    user.setUsername(username);
+    return user;
+  }
 
-	private String savedUsername() {
-		ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
-		verify(userRepository).saveAndFlush(saved.capture());
-		return saved.getValue().getUsername();
-	}
+  private String savedUsername() {
+    ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+    verify(userRepository).saveAndFlush(saved.capture());
+    return saved.getValue().getUsername();
+  }
 
-	@Test
-	void theDerivedUsernameIsStored() {
-		when(userMapper.toUser(any())).thenReturn(mappedWith(DERIVED));
-		when(userRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(userMapper.toUserResponse(any())).thenReturn(new UserResponse());
+  @Test
+  void theDerivedUsernameIsStored() {
+    when(userMapper.toUser(any())).thenReturn(mappedWith(DERIVED));
+    when(userRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(userMapper.toUserResponse(any())).thenReturn(UserResponse.builder().build());
 
-		authService.signUp(signUp());
+    authService.signUp(signUp());
 
-		assertThat(savedUsername()).isEqualTo(DERIVED);
-	}
+    assertThat(savedUsername()).isEqualTo(DERIVED);
+  }
 
-	@Test
-	void aTakenUsernameGetsASuffixRatherThanAConstraintViolation() {
-		when(userMapper.toUser(any())).thenReturn(mappedWith(DERIVED));
-		when(userRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(userMapper.toUserResponse(any())).thenReturn(new UserResponse());
-		// The local part is not unique: john@gmail.com and john@company.com derive
-		// the same thing, and the column is UNIQUE. Nothing asks the user for a
-		// username, so nothing else would settle this.
-		when(userRepository.existsByUsername(DERIVED)).thenReturn(true);
+  @Test
+  void aTakenUsernameGetsASuffixRatherThanAConstraintViolation() {
+    when(userMapper.toUser(any())).thenReturn(mappedWith(DERIVED));
+    when(userRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(userMapper.toUserResponse(any())).thenReturn(UserResponse.builder().build());
+    // The local part is not unique: john@gmail.com and john@company.com derive
+    // the same thing, and the column is UNIQUE. Nothing asks the user for a
+    // username, so nothing else would settle this.
+    when(userRepository.existsByUsername(DERIVED)).thenReturn(true);
 
-		authService.signUp(signUp());
+    authService.signUp(signUp());
 
-		assertThat(savedUsername()).isNotEqualTo(DERIVED).startsWith("john");
-	}
+    assertThat(savedUsername()).isNotEqualTo(DERIVED).startsWith("john");
+  }
 
-	@Test
-	void theStoredUsernameAlwaysFitsWhatTheProfileEndpointAccepts() {
-		when(userMapper.toUser(any())).thenReturn(mappedWith(DERIVED));
-		when(userRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
-		when(userMapper.toUserResponse(any())).thenReturn(new UserResponse());
-		// Three takers, so the suffix has to grow -- and it still cannot push the
-		// value outside the 8-20 that PUT /api/users enforces, or the user could
-		// never save their own profile again.
-		when(userRepository.existsByUsername(any())).thenReturn(true, true, true, false);
+  @Test
+  void theStoredUsernameAlwaysFitsWhatTheProfileEndpointAccepts() {
+    when(userMapper.toUser(any())).thenReturn(mappedWith(DERIVED));
+    when(userRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(userMapper.toUserResponse(any())).thenReturn(UserResponse.builder().build());
+    // Three takers, so the suffix has to grow -- and it still cannot push the
+    // value outside the 8-20 that PUT /api/users enforces, or the user could
+    // never save their own profile again.
+    when(userRepository.existsByUsername(any())).thenReturn(true, true, true, false);
 
-		authService.signUp(signUp());
+    authService.signUp(signUp());
 
-		assertThat(savedUsername().length())
-				.isBetween(UserUtils.MIN_USERNAME_LENGTH, UserUtils.MAX_USERNAME_LENGTH);
-	}
+    assertThat(savedUsername().length())
+        .isBetween(UserUtils.MIN_USERNAME_LENGTH, UserUtils.MAX_USERNAME_LENGTH);
+  }
 }
